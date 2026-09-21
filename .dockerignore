@@ -1,0 +1,11 @@
+.git
+.venv
+**/node_modules
+frontend/dist
+geoprocessing/data
+**/__pycache__
+**/.pytest_cache
+.ruff_cache
+.env*
+odd
+.atl
