@@ -1,0 +1,45 @@
+openapi: 3.1.0
+info:
+  title: Río Uruguay en Colón
+  version: 0.1.0
+  description: |
+    API pública de solo lectura con el estado del río Uruguay en Colón (Entre Ríos).
+    Fuente de verdad del contrato entre el backend FastAPI y la web.
+servers:
+  - url: /api
+    description: Mismo origen que la web (proxy del dev server de Vite y de nginx)
+  - url: http://localhost:8000
+    description: API corriendo local, puerto según .env.local (API_PORT)
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Estado del servicio y de la conexión a la base de datos
+      tags: [health]
+      responses:
+        "200":
+          description: El proceso de la API responde; `db` indica si Postgres contesta.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              examples:
+                ok:
+                  value: { status: ok, db: ok }
+                dbError:
+                  value: { status: ok, db: error }
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status, db]
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum: [ok]
+          description: Siempre `ok` si el proceso responde.
+        db:
+          type: string
+          enum: [ok, error]
+          description: Resultado de un `SELECT 1` contra Postgres.
