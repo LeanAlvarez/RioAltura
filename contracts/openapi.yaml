@@ -28,6 +28,76 @@ paths:
                   value: { status: ok, db: ok }
                 dbError:
                   value: { status: ok, db: error }
+  /alturas/ultima:
+    get:
+      operationId: getAlturaUltima
+      summary: Última altura real conocida del puerto, con tendencia y estado
+      tags: [alturas]
+      responses:
+        "200":
+          description: Última lectura disponible (INA o Prefectura).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UltimaAltura"
+              examples:
+                alerta:
+                  value:
+                    fecha_hora: "2026-09-21T12:00:00Z"
+                    altura_m: 7.15
+                    fuente: ina
+                    tendencia_24h_m: 0.12
+                    estado: alerta
+        "404":
+          description: Todavía no hay lecturas cargadas.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                sinDatos:
+                  value: { detail: "Sin datos de altura" }
+  /alturas:
+    get:
+      operationId: listAlturasDiarias
+      summary: Serie diaria de altura real del puerto (promedio por día)
+      tags: [alturas]
+      parameters:
+        - name: desde
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: hasta
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Promedio diario de altura, ordenado por fecha ascendente.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AlturaDiaria"
+              examples:
+                rango:
+                  value:
+                    - { fecha: "2024-05-13", altura_m: 8.40 }
+                    - { fecha: "2024-05-14", altura_m: 9.06 }
+        "422":
+          description: Rango inválido (desde > hasta, más de 3 años, o parámetros faltantes).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                rangoMaximo:
+                  value: { detail: "El rango máximo es de 3 años" }
 components:
   schemas:
     HealthResponse:
@@ -43,3 +113,53 @@ components:
           type: string
           enum: [ok, error]
           description: Resultado de un `SELECT 1` contra Postgres.
+    UltimaAltura:
+      type: object
+      required: [fecha_hora, altura_m, fuente, tendencia_24h_m, estado]
+      additionalProperties: false
+      properties:
+        fecha_hora:
+          type: string
+          format: date-time
+          description: Momento de la lectura, en UTC.
+        altura_m:
+          type: number
+          description: Altura real medida en el puerto, en metros sobre el cero local.
+        fuente:
+          type: string
+          enum: [ina, prefectura]
+          description: Origen del dato (INA es primario, Prefectura es respaldo).
+        tendencia_24h_m:
+          type: [number, "null"]
+          description: >
+            Diferencia con la lectura más cercana a 24 h antes (ventana de 20 a 36 h);
+            `null` si no hay ninguna lectura en esa ventana.
+        estado:
+          type: string
+          enum: [normal, evacuacion_en_seco, alerta, evacuacion]
+          description: Nivel de aviso según los umbrales locales de Colón.
+    AlturaDiaria:
+      type: object
+      required: [fecha, altura_m]
+      additionalProperties: false
+      properties:
+        fecha:
+          type: string
+          format: date
+          description: Día local (America/Argentina/Buenos_Aires).
+        altura_m:
+          type: number
+          description: Promedio diario de altura real, en metros sobre el cero local.
+    ErrorResponse:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          description: >
+            Mensaje de error legible. En los 422 de validación de FastAPI
+            (parámetros faltantes o mal formados) es una lista de errores.
+          oneOf:
+            - type: string
+            - type: array
+              items:
+                type: object
