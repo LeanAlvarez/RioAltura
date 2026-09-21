@@ -13,6 +13,23 @@ jobs:
   python:
     name: ruff + pytest (backend, worker, scripts)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: rioaltura
+          POSTGRES_PASSWORD: rioaltura
+          POSTGRES_DB: rioaltura
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rioaltura"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Tests marcados con TEST_DATABASE_URL corren contra este Postgres real.
+      TEST_DATABASE_URL: postgresql+psycopg://rioaltura:rioaltura@localhost:5432/rioaltura
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
