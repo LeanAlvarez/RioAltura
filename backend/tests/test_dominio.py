@@ -40,3 +40,18 @@ def test_altura_estimada_es_monotona_en_el_rango_util() -> None:
 def test_altura_estimada_rechaza_caudal_no_positivo(caudal: float) -> None:
     with pytest.raises(ValueError):
         dominio.altura_estimada(caudal)
+
+
+def test_caudal_max_calibrado_m3s() -> None:
+    assert dominio.CAUDAL_MAX_CALIBRADO_M3S == 15_000
+
+
+@pytest.mark.parametrize(
+    ("caudal", "esperado"),
+    [
+        (15_000, False),
+        (15_000.1, True),
+    ],
+)
+def test_es_extrapolado_en_el_borde(caudal: float, esperado: bool) -> None:
+    assert dominio.es_extrapolado(caudal) is esperado

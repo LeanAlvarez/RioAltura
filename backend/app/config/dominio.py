@@ -50,6 +50,11 @@ CURVA_C = 64.8496
 # The forecast level is ALWAYS shown as a range, never as an exact number.
 RANGO_ESTIMACION_M = 1.0
 
+# Discharge (m³/s) up to which the rating curve was calibrated against
+# observed events. Beyond this value, the estimated level is an
+# extrapolation of the curve, not a calibrated result.
+CAUDAL_MAX_CALIBRADO_M3S = 15_000
+
 
 def cota_agua(altura_puerto: float) -> float:
     """Water surface elevation (m IGN) from the port gauge reading (m)."""
@@ -65,3 +70,8 @@ def altura_estimada(caudal_m3s: float) -> float:
         raise ValueError("caudal_m3s must be positive")
     ln_q = math.log(caudal_m3s)
     return CURVA_A * ln_q**2 + CURVA_B * ln_q + CURVA_C
+
+
+def es_extrapolado(caudal_m3s: float) -> bool:
+    """Whether `caudal_m3s` is above the calibrated range of the rating curve."""
+    return caudal_m3s > CAUDAL_MAX_CALIBRADO_M3S
