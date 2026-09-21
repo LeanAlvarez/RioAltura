@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config.settings import get_settings
 from app.logging_config import configure_logging
-from app.routers import health
+from app.routers import alturas, health
 
 
 def create_app() -> FastAPI:
@@ -18,6 +18,7 @@ def create_app() -> FastAPI:
     # Public, read-only API: allow the web app from any origin.
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
     app.include_router(health.router)
+    app.include_router(alturas.router)
     return app
 
 

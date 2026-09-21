@@ -4,17 +4,18 @@ from logging.config import fileConfig
 
 from alembic import context
 from app.config.settings import get_settings
+from app.models import Base
 from sqlalchemy import engine_from_config, pool
 
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Keep loggers created before this point (e.g. by tests) enabled.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
-# No models yet: business tables arrive in later specs.
-target_metadata = None
+target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:

@@ -1,6 +1,12 @@
 import logging
+from datetime import UTC, datetime
 
 from apscheduler.triggers.interval import IntervalTrigger
+from jobs.alturas import (
+    ALTURAS_FIRST_RUN_DELAY_SECONDS,
+    ALTURAS_INTERVAL_SECONDS,
+    job_actualizar_alturas,
+)
 from jobs.heartbeat import HEARTBEAT_INTERVAL_SECONDS, heartbeat
 from jobs.scheduler import build_scheduler
 
@@ -14,6 +20,20 @@ def test_registra_el_job_heartbeat_cada_minuto() -> None:
     assert isinstance(job.trigger, IntervalTrigger)
     assert job.trigger.interval.total_seconds() == HEARTBEAT_INTERVAL_SECONDS == 60
     assert job.func is heartbeat
+
+
+def test_registra_el_job_alturas_cada_hora() -> None:
+    scheduler = build_scheduler()
+
+    job = scheduler.get_job("alturas")
+
+    assert job is not None
+    assert isinstance(job.trigger, IntervalTrigger)
+    assert job.trigger.interval.total_seconds() == ALTURAS_INTERVAL_SECONDS == 3600
+    assert job.func is job_actualizar_alturas
+    # Never runs immediately: the worker process test must not touch real sources.
+    delay = (job.next_run_time - datetime.now(UTC)).total_seconds()
+    assert 0 < delay <= ALTURAS_FIRST_RUN_DELAY_SECONDS == 60
 
 
 def test_heartbeat_solo_loguea(caplog) -> None:

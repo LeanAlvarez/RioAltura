@@ -2,10 +2,15 @@
 
 import logging
 import signal
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
+from jobs.alturas import (
+    ALTURAS_FIRST_RUN_DELAY_SECONDS,
+    ALTURAS_INTERVAL_SECONDS,
+    job_actualizar_alturas,
+)
 from jobs.heartbeat import HEARTBEAT_INTERVAL_SECONDS, heartbeat
 
 logger = logging.getLogger(__name__)
@@ -20,6 +25,16 @@ def build_scheduler() -> BlockingScheduler:
         id="heartbeat",
         # Run once right at startup so a fresh process logs immediately.
         next_run_time=datetime.now(UTC),
+    )
+    scheduler.add_job(
+        job_actualizar_alturas,
+        "interval",
+        seconds=ALTURAS_INTERVAL_SECONDS,
+        id="alturas",
+        # First run shortly after startup, not immediately: the sources are
+        # external and a fresh process should not hit them before it is
+        # healthy. Failures are caught and logged inside the job.
+        next_run_time=datetime.now(UTC) + timedelta(seconds=ALTURAS_FIRST_RUN_DELAY_SECONDS),
     )
     return scheduler
 
