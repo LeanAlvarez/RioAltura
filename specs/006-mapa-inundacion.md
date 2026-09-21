@@ -75,6 +75,17 @@ Llevar a la app el mapa de inundación que validamos en el notebook: zonas que s
 
 Escritorio (1024 px): ![desktop](img/006-desktop-1024.jpg)
 
+Las tres capturas de arriba son del módulo suelto, antes del rebase sobre la spec 005. Ya integrado
+en el dashboard, el mapa es la última tarjeta y el panel se acopla a la derecha por encima de 768 px:
+
+| Integrado, 360 px | Integrado, 1024 px |
+|---|---|
+| ![integrado móvil](img/006-integrado-360.jpg) | ![integrado escritorio](img/006-integrado-desktop.jpg) |
+
+Ambas con el sistema en modo oscuro, que es donde aparecieron los defectos de contraste (Hallazgos 5 y 6).
+El slider arranca en "Pronóstico máx." porque la 005 le pasa la altura estimada; "Hoy" queda
+deshabilitado hasta que haya altura real.
+
 Validación a ojo de la capa 4,50 m rasterizada sobre el DEM (azul = agua nueva por clase, cruz roja = hidrómetro): ![preview DEM 4,50](img/006-dem-preview-450.jpg)
 
 ## Cómo verificar
@@ -93,7 +104,7 @@ uv run --project geoprocessing python geoprocessing/generar_capas.py --no-expand
 # Checks del repo
 uv run ruff check . && uv run ruff format --check .
 uv run pytest -q                       # backend + worker + scripts (geoprocessing no se recolecta acá)
-pnpm -C frontend build && pnpm -C frontend test   # 30 tests (23 nuevos en capas.test.ts)
+pnpm -C frontend build && pnpm -C frontend test   # 71 tests tras el rebase (23 nuevos en capas.test.ts)
 
 # A mano en el navegador (scripts/wt-env.sh define WEB_PORT)
 pnpm -C frontend dev
@@ -136,6 +147,29 @@ Encontrado durante la implementación (dentro del alcance, ya resuelto):
    escala del celular no se nota; si en una spec futura se quiere más detalle en el casco urbano,
    la vía es una capa aparte de mayor resolución para el centro, no bajar la tolerancia global.
 
+Encontrado al integrar con `main` (rebase sobre la spec 005, ya resuelto):
+
+4. **El mapa se monta dentro del layout de la 005, no sobre un `#map` propio.** La 006 se escribió
+   contra un `main.ts` que creaba su propio contenedor y asignaba `window.mapaInundacion`. En `main`
+   ese archivo es de la 005, que ya trae el puente defensivo `components/mapa.ts`: importa `./map`
+   de forma diferida y llama `createMap(container)` y, si existe, `setNivelPronosticado` **del
+   módulo**. Se resolvió a favor del layout de la 005 (lo que pedía la spec) y `map.ts` pasó a
+   exponer `setNivelActual` / `setNivelPronosticado` a nivel de módulo, delegando en la última
+   instancia creada; `createMap` publica esa instancia en `window.mapaInundacion`. Sin ese puente el
+   mapa se montaba pero se quedaba en 4,44 m fijo, ignorando el pronóstico.
+
+5. **Contraste ilegible en modo oscuro.** Ninguna de las dos specs lo tenía sola: la 005 agregó el
+   bloque `prefers-color-scheme: dark` y los overlays de la 006 fijan superficie clara pero heredaban
+   `--fg` / `--muted`. Resultado: la lectura principal del panel quedaba en 1,15:1 (texto casi blanco
+   sobre panel casi blanco). Los overlays ahora fijan sus propios tokens claros: 15,2:1 el número
+   principal, 5,8:1 los secundarios (AA pide 4,5:1).
+
+6. **La hoja inferior tapaba la atribución de Leaflet a 360 px.** Ambas se anclan al borde inferior.
+   Subir el `z-index` de `.leaflet-control-attribution` no alcanza porque Leaflet arma contexto de
+   apilamiento en `.leaflet-bottom`: hay que subirlo en ese ancestro. Se hizo eso y se reservó lugar
+   en el panel (8 px de separación medidos). Arriba de 768 px el panel se acopla a la derecha y nunca
+   hubo solapamiento.
+
 Fuera de alcance (no se tocó):
 
 - **CI:** `.github/workflows` corre solo `uv run pytest` del workspace; los tests de geoprocessing
@@ -153,8 +187,8 @@ Fuera de alcance (no se tocó):
 
 ## Resumen final
 
-Capas de inundación 3,00–13,00 m generadas del DEM Copernicus (36 GeoJSON, 13,9 MB, paso 0,5 sobre 10,50 por presupuesto) con `geoprocessing/generar_capas.py`, tests y README.
-Se corrigieron dos artefactos del DEM (costura del río a 2,5 m y columna nodata) que inflaban las hectáreas bajas.
-Módulo de mapa (`capas.ts` puro + `map.ts` Leaflet): slider, escenarios, leyenda, hidrómetro, aviso de modelo y aviso de fuera de rango; API `setNivelActual` / `setNivelPronosticado` expuesta en `window.mapaInundacion`.
-Verificado: ruff, pytest, 27 tests geo, 30 tests web, build; cambio de capa en caché 4–24 ms; capturas a 360 px en la spec.
+Capas de inundación 3,00–13,00 m del DEM Copernicus (36 GeoJSON, 13,9 MB, paso 0,5 sobre 10,50 por presupuesto) con `geoprocessing/generar_capas.py`, tests y README; se corrigieron dos artefactos del DEM (costura del río a 2,5 m y columna nodata) que inflaban las hectáreas bajas.
+Módulo de mapa (`capas.ts` puro + `map.ts` Leaflet): slider, escenarios, leyenda, hidrómetro y avisos de modelo y de fuera de rango; API expuesta en `window.mapaInundacion` y a nivel de módulo para el puente de la 005.
+Al integrar con la 005 se corrigieron el cableado del pronóstico y dos defectos de modo oscuro: panel ilegible (1,15:1 → 15,2:1) y la hoja inferior tapando la atribución de Leaflet.
+Verificado sobre `main` ya rebaseado: ruff, 138 tests py, 27 geo, 71 web, build; cambio de capa en caché 2–9 ms.
 Pendiente fuera de alcance: tests geo en CI, calibración del datum, capa de etiquetas.
