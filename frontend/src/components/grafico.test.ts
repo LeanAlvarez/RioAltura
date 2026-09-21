@@ -73,6 +73,16 @@ describe("buildResumenTexto", () => {
     expect(texto).toContain("3,40 m");
     expect(texto).toContain("3,67 m");
     expect(texto).toContain("Pronóstico");
+
+    // El pronóstico, igual que la frase de la tarjeta "Próximos días", nunca
+    // se muestra como un número exacto: siempre como rango. Verificamos que,
+    // fuera del propio rango ("entre X y Y m"), no quede ningún otro valor
+    // de metros suelto.
+    const partePronostico = texto.slice(texto.indexOf("Pronóstico"));
+    const rango = partePronostico.match(/entre .+? y .+? m/);
+    expect(rango).not.toBeNull();
+    const restoSinRango = partePronostico.replace(rango?.[0] ?? "", "");
+    expect(restoSinRango).not.toMatch(/\d,\d+ m/);
   });
 
   it("avisa cuando no hay datos reales", () => {

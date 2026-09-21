@@ -1,20 +1,16 @@
 import type { AlturaDiaria, DiaPronostico, HistoricoDia, Pronostico, UltimaAltura } from "../api/types";
+import { CAUDAL_MAX_CALIBRADO_M3S, CURVA_A, CURVA_B, CURVA_C, RANGO_ESTIMACION_M } from "../domain/dominio";
 
 /**
  * Realistic fixtures for offline/manual development (`VITE_USE_MOCKS=true`).
  * Scenario per spec 005: hoy ~3,7 m subiendo; pronóstico hasta ~9.100 m³/s
  * (≈5,5 m), sin aviso.
  *
- * The rating curve below is a mock-only duplicate of
- * `backend/app/config/dominio.py::altura_estimada`, kept in sync manually.
- * It is NOT the source of truth — never use it outside these fixtures.
+ * The rating curve constants come from `../domain/dominio.ts` (the single
+ * frontend mirror of `backend/app/config/dominio.py`); only the formula
+ * below is duplicated for mock purposes, since the real API computes
+ * `altura_est_m` itself.
  */
-
-const CURVA_A = 1.1926;
-const CURVA_B = -17.3863;
-const CURVA_C = 64.8496;
-const RANGO_ESTIMACION_M = 1.0;
-const CAUDAL_MAX_CALIBRADO_M3S = 15_000;
 
 function alturaEstimadaMock(caudalM3s: number): number {
   const lnQ = Math.log(caudalM3s);
