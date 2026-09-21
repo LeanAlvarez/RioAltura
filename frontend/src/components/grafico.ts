@@ -4,7 +4,7 @@ import { getAlturasDiarias } from "../api/alturas";
 import { getPronostico, getPronosticoHistorico } from "../api/pronostico";
 import type { AlturaDiaria, DiaPronostico, HistoricoDia } from "../api/types";
 import { ALERTA_M, EVACUACION_EN_SECO_M, EVACUACION_M } from "../domain/dominio";
-import { formatMetros, formatRangoMetros, parseFechaLocal } from "../format";
+import { formatDiaSemanaFecha, formatMetros, formatRangoMetros, parseFechaLocal } from "../format";
 
 export type RangoDias = 30 | 90 | 365;
 export const RANGOS: readonly RangoDias[] = [30, 90, 365];
@@ -76,11 +76,11 @@ export function buildResumenTexto(alturas: readonly AlturaDiaria[], pronostico: 
   const max = Math.max(...valores);
   const ultimo = alturas[alturas.length - 1];
   let texto = `Altura real: entre ${formatMetros(min)} y ${formatMetros(max)} en el período mostrado`;
-  if (ultimo) texto += `, ${formatMetros(ultimo.altura_m)} el último dato (${ultimo.fecha})`;
+  if (ultimo) texto += `, ${formatMetros(ultimo.altura_m)} el último dato (${formatDiaSemanaFecha(ultimo.fecha)})`;
   texto += ".";
   if (pronostico && pronostico.length > 0) {
     const maxCentro = pronostico.reduce((m, d) => (d.altura_max_m > m.altura_max_m ? d : m));
-    texto += ` Pronóstico: podría llegar a ${formatRangoMetros(maxCentro.altura_min_m, maxCentro.altura_max_m)} el ${maxCentro.fecha}.`;
+    texto += ` Pronóstico: podría llegar a ${formatRangoMetros(maxCentro.altura_min_m, maxCentro.altura_max_m)} el ${formatDiaSemanaFecha(maxCentro.fecha)}.`;
   }
   return texto;
 }
