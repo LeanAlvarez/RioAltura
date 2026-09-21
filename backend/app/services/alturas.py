@@ -7,7 +7,13 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import Engine
 
 from app.config import dominio
-from app.repositories.alturas import AlturaRow, get_reading_in_window, get_ultima, list_alturas
+from app.repositories.alturas import (
+    AlturaRow,
+    get_primera,
+    get_reading_in_window,
+    get_ultima,
+    list_alturas,
+)
 from app.schemas.alturas import ESTADOS, AlturaDiaria, Estado, UltimaAltura
 
 __all__ = [
@@ -18,6 +24,9 @@ __all__ = [
     "obtener_ultima",
     "promediar_por_dia",
     "listar_diario",
+    "altura_en",
+    "primera_fecha",
+    "hoy_buenos_aires",
 ]
 
 BUENOS_AIRES = ZoneInfo("America/Argentina/Buenos_Aires")
@@ -101,3 +110,31 @@ def listar_diario(engine: Engine, desde: date, hasta: date) -> list[AlturaDiaria
 
     rows = list_alturas(engine, desde_utc, hasta_utc)
     return promediar_por_dia(rows)
+
+
+def altura_en(engine: Engine, fecha: date) -> float | None:
+    """Real average gauge reading (m) for exactly `fecha`'s local calendar day, or None.
+
+    Used both by forecast anchoring (spec 007, C2) and by statistics that
+    compare "today" against other days, so both read the same definition of
+    "the real height of a given day".
+    """
+    dias = listar_diario(engine, fecha, fecha)
+    return dias[0].altura_m if dias else None
+
+
+def primera_fecha(engine: Engine, tz: ZoneInfo = BUENOS_AIRES) -> date | None:
+    """Local calendar date of the oldest stored reading, or None if there are none."""
+    primera = get_primera(engine)
+    return primera.fecha_hora.astimezone(tz).date() if primera is not None else None
+
+
+def hoy_buenos_aires(ahora: datetime | None = None) -> date:
+    """Today's local date (America/Argentina/Buenos_Aires).
+
+    Accepts an explicit `ahora` (must be timezone-aware) so callers can pin
+    "now" in tests instead of depending on the wall clock.
+    """
+    if ahora is None:
+        ahora = datetime.now(UTC)
+    return ahora.astimezone(BUENOS_AIRES).date()

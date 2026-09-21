@@ -78,6 +78,14 @@ def get_ultima(engine: Engine) -> AlturaRow | None:
     return _row_to_altura(row) if row is not None else None
 
 
+def get_primera(engine: Engine) -> AlturaRow | None:
+    """Return the oldest stored reading (ties broken in favour of 'ina')."""
+    stmt = select(Altura).order_by(Altura.fecha_hora.asc(), (Altura.fuente != "ina").asc()).limit(1)
+    with Session(engine) as session:
+        row = session.execute(stmt).scalars().first()
+    return _row_to_altura(row) if row is not None else None
+
+
 def get_reading_in_window(engine: Engine, desde: datetime, hasta: datetime) -> AlturaRow | None:
     """Return the most recent reading with fecha_hora in [desde, hasta] (inclusive)."""
     stmt = (

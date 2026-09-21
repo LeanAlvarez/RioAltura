@@ -25,6 +25,10 @@ export interface DiaPronostico {
   altura_est_m: number;
   altura_min_m: number;
   altura_max_m: number;
+  /** `altura_est_m` trasladada hacia la altura real de hoy (spec 007, C2). Presentación, no recalibración. */
+  altura_anclada_m: number;
+  altura_anclada_min_m: number;
+  altura_anclada_max_m: number;
   extrapolado: boolean;
 }
 
@@ -37,11 +41,27 @@ export interface AvisoPronostico {
   caudal_max_m3s: number | null;
 }
 
+export interface Anclaje {
+  aplicado: boolean;
+  sesgo_m: number | null;
+  altura_real_m: number | null;
+  fecha_referencia: string | null;
+  motivo: string | null;
+}
+
 export interface Pronostico {
   emitido: string;
   gauge_id: string;
   dias: DiaPronostico[];
   aviso: AvisoPronostico;
+  anclaje: Anclaje;
+}
+
+/** Mismo `DiaPronostico[]` que `Pronostico`, sin `aviso` (el gauge aguas arriba no tiene nivel de aviso propio). */
+export interface PronosticoAguasArriba {
+  emitido: string;
+  gauge_id: string;
+  dias: DiaPronostico[];
 }
 
 export interface HistoricoDia {
@@ -49,4 +69,41 @@ export interface HistoricoDia {
   caudal_m3s: number;
   altura_est_m: number;
   extrapolado: boolean;
+}
+
+export interface PercentilHoy {
+  altura_m: number;
+  percentil: number;
+  ventana_dias: number;
+}
+
+export interface ErrorPronostico {
+  lead_dias: number;
+  muestras: number;
+  mae_m: number | null;
+}
+
+export interface RangoAlerta {
+  desde: string;
+  hasta: string;
+  max_m: number;
+}
+
+export interface MismoDiaAnio {
+  anio: number;
+  altura_m: number;
+}
+
+export interface Evento {
+  fecha: string;
+  altura_m: number;
+  etiqueta: string;
+}
+
+export interface Estadisticas {
+  percentil_hoy: PercentilHoy | null;
+  error_pronostico: ErrorPronostico;
+  dias_en_alerta: RangoAlerta[];
+  mismo_dia_otros_anios: MismoDiaAnio[];
+  eventos: Evento[];
 }

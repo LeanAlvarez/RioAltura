@@ -5,6 +5,7 @@ import pytest
 from app.models import Base
 from app.repositories.alturas import (
     AlturaIn,
+    get_primera,
     get_reading_in_window,
     get_ultima,
     list_alturas,
@@ -146,6 +147,26 @@ def test_list_alturas_ordena_por_fecha_hora(engine: Engine) -> None:
     filas = list_alturas(engine, datetime(2024, 1, 1, tzinfo=UTC), datetime(2025, 1, 1, tzinfo=UTC))
 
     assert [f.fecha_hora.day for f in filas] == [13, 14, 15]
+
+
+def test_get_primera_devuelve_la_de_fecha_hora_mas_antigua(engine: Engine) -> None:
+    upsert_alturas(
+        engine,
+        [
+            AlturaIn(fecha_hora=datetime(2024, 5, 14, 12, tzinfo=UTC), altura_m=9.06, fuente="ina"),
+            AlturaIn(fecha_hora=datetime(2023, 10, 1, 8, tzinfo=UTC), altura_m=3.0, fuente="ina"),
+        ],
+    )
+
+    primera = get_primera(engine)
+
+    assert primera is not None
+    assert primera.altura_m == pytest.approx(3.0)
+    assert primera.fecha_hora == datetime(2023, 10, 1, 8, tzinfo=UTC)
+
+
+def test_get_primera_con_base_vacia_devuelve_none(engine: Engine) -> None:
+    assert get_primera(engine) is None
 
 
 def test_lecturas_devueltas_tienen_timezone_utc(engine: Engine) -> None:

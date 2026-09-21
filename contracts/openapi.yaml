@@ -122,6 +122,9 @@ paths:
                         altura_est_m: 5.9
                         altura_min_m: 4.9
                         altura_max_m: 6.9
+                        altura_anclada_m: 6.52
+                        altura_anclada_min_m: 5.52
+                        altura_anclada_max_m: 7.52
                         extrapolado: false
                       - fecha: "2026-09-20"
                         lead_dias: 1
@@ -129,12 +132,21 @@ paths:
                         altura_est_m: 7.07
                         altura_min_m: 6.07
                         altura_max_m: 8.07
+                        altura_anclada_m: 7.60
+                        altura_anclada_min_m: 6.60
+                        altura_anclada_max_m: 8.60
                         extrapolado: false
                     aviso:
                       nivel: alerta_probable
                       umbral_m3s: 11000
                       primer_dia: "2026-09-20"
                       caudal_max_m3s: 12836.0
+                    anclaje:
+                      aplicado: true
+                      sesgo_m: 0.62
+                      altura_real_m: 6.52
+                      fecha_referencia: "2026-09-19"
+                      motivo: null
         "503":
           description: Todavía no hay ningún pronóstico de Google guardado.
           content:
@@ -226,6 +238,36 @@ paths:
               examples:
                 sinDatos:
                   value: { detail: "Todavía no hay un pronóstico de Google cargado" }
+  /estadisticas:
+    get:
+      operationId: getEstadisticas
+      summary: Estadísticas agregadas sobre las alturas reales y los pronósticos guardados
+      description: >
+        Todo se calcula sobre lo que ya está en la base (nunca llama a APIs externas
+        en el request path, ver CLAUDE.md sección 3).
+      tags: [estadisticas]
+      responses:
+        "200":
+          description: Estadísticas agregadas. Los campos se degradan a listas vacías o `null`
+            cuando no hay datos suficientes para calcularlos, nunca se inventan.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Estadisticas"
+              examples:
+                conDatos:
+                  value:
+                    percentil_hoy: { altura_m: 4.29, percentil: 78.4, ventana_dias: 365 }
+                    error_pronostico: { lead_dias: 3, muestras: 120, mae_m: 0.35 }
+                    dias_en_alerta:
+                      - { desde: "2024-05-13", hasta: "2024-05-16", max_m: 9.06 }
+                    mismo_dia_otros_anios:
+                      - { anio: 2024, altura_m: 3.10 }
+                      - { anio: 2025, altura_m: 5.80 }
+                    eventos:
+                      - { fecha: "2024-05-14", altura_m: 9.06, etiqueta: "Máximo diario registrado (INA)" }
+                      - { fecha: "2025-06-18", altura_m: 7.62, etiqueta: "Crecida de referencia" }
+                      - { fecha: "2026-07-09", altura_m: 4.44, etiqueta: "Costanera inundada" }
 components:
   schemas:
     HealthResponse:
@@ -281,7 +323,18 @@ components:
     DiaPronostico:
       type: object
       required:
-        [fecha, lead_dias, caudal_m3s, altura_est_m, altura_min_m, altura_max_m, extrapolado]
+        [
+          fecha,
+          lead_dias,
+          caudal_m3s,
+          altura_est_m,
+          altura_min_m,
+          altura_max_m,
+          altura_anclada_m,
+          altura_anclada_min_m,
+          altura_anclada_max_m,
+          extrapolado,
+        ]
       additionalProperties: false
       properties:
         fecha:
@@ -292,7 +345,9 @@ components:
           description: Días de anticipación de este pronóstico respecto de la emisión (`emitido`).
         caudal_m3s:
           type: number
-          description: Caudal pronosticado por Google, en metros cúbicos por segundo.
+          description: >
+            Caudal pronosticado por Google, en metros cúbicos por segundo. El anclaje
+            (`altura_anclada_*`) nunca lo modifica.
         altura_est_m:
           type: number
           description: >
@@ -304,6 +359,18 @@ components:
         altura_max_m:
           type: number
           description: Extremo superior del rango de altura estimada (`altura_est_m + 1,0 m`).
+        altura_anclada_m:
+          type: number
+          description: >
+            `altura_est_m` trasladada hacia la altura real de hoy (spec 007, C2): corrección de
+            PRESENTACIÓN sobre la curva, no una recalibración. Igual a `altura_est_m` cuando
+            `Pronostico.anclaje.aplicado` es `false`, o a partir del día `HORIZONTE_ANCLAJE_DIAS`.
+        altura_anclada_min_m:
+          type: number
+          description: Igual a `altura_anclada_m` pero para `altura_min_m`.
+        altura_anclada_max_m:
+          type: number
+          description: Igual a `altura_anclada_m` pero para `altura_max_m`.
         extrapolado:
           type: boolean
           description: >
@@ -333,9 +400,36 @@ components:
           description: >
             Caudal máximo pronosticado entre los días considerados (lead 1 a 7); `null`
             si no hay ningún día en esa ventana.
+    Anclaje:
+      type: object
+      required: [aplicado, sesgo_m, altura_real_m, fecha_referencia, motivo]
+      additionalProperties: false
+      properties:
+        aplicado:
+          type: boolean
+          description: >
+            `false` si no hay un día de pronóstico para hoy o no hay una altura real
+            disponible para hoy; en ese caso `altura_anclada_*` queda igual a la altura
+            estimada sin ajustar, y `motivo` explica por qué.
+        sesgo_m:
+          type: [number, "null"]
+          description: >
+            `altura_real_m - altura_est_m` del día de hoy; `null` si `aplicado` es `false`.
+        altura_real_m:
+          type: [number, "null"]
+          description: Altura real promedio de hoy usada para calcular el sesgo; `null` si
+            `aplicado` es `false`.
+        fecha_referencia:
+          type: [string, "null"]
+          format: date
+          description: Fecha de hoy usada como referencia; `null` si `aplicado` es `false`.
+        motivo:
+          type: [string, "null"]
+          description: Explicación en español de por qué no se ancló; `null` si `aplicado`
+            es `true`.
     Pronostico:
       type: object
-      required: [emitido, gauge_id, dias, aviso]
+      required: [emitido, gauge_id, dias, aviso, anclaje]
       additionalProperties: false
       properties:
         emitido:
@@ -349,9 +443,12 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/DiaPronostico"
-          description: Solo días con `lead_dias >= 0`, ordenados por fecha ascendente.
+          description: Solo días con `fecha >= hoy` (hora de Buenos Aires), ordenados por fecha
+            ascendente.
         aviso:
           $ref: "#/components/schemas/AvisoPronostico"
+        anclaje:
+          $ref: "#/components/schemas/Anclaje"
     PronosticoAguasArriba:
       type: object
       required: [emitido, gauge_id, dias]
@@ -381,6 +478,97 @@ components:
           type: number
         extrapolado:
           type: boolean
+    PercentilHoy:
+      type: object
+      required: [altura_m, percentil, ventana_dias]
+      additionalProperties: false
+      properties:
+        altura_m:
+          type: number
+          description: Altura real promedio de hoy.
+        percentil:
+          type: number
+          description: Porcentaje de días de la ventana con altura menor a la de hoy.
+        ventana_dias:
+          type: integer
+          description: Tamaño de la ventana histórica usada (365 días).
+    ErrorPronostico:
+      type: object
+      required: [lead_dias, muestras, mae_m]
+      additionalProperties: false
+      properties:
+        lead_dias:
+          type: integer
+          description: Anticipación del pronóstico comparado (siempre 3 días).
+        muestras:
+          type: integer
+          description: Cantidad de días con pronóstico a este lead y altura real disponibles.
+        mae_m:
+          type: [number, "null"]
+          description: Error absoluto promedio, en metros; `null` si `muestras` es 0.
+    RangoAlerta:
+      type: object
+      required: [desde, hasta, max_m]
+      additionalProperties: false
+      properties:
+        desde:
+          type: string
+          format: date
+        hasta:
+          type: string
+          format: date
+        max_m:
+          type: number
+          description: Altura máxima real dentro del rango.
+    MismoDiaAnio:
+      type: object
+      required: [anio, altura_m]
+      additionalProperties: false
+      properties:
+        anio:
+          type: integer
+        altura_m:
+          type: number
+          description: Altura real de ese mismo día y mes, en ese año.
+    Evento:
+      type: object
+      required: [fecha, altura_m, etiqueta]
+      additionalProperties: false
+      properties:
+        fecha:
+          type: string
+          format: date
+        altura_m:
+          type: number
+        etiqueta:
+          type: string
+          description: Descripción legible en español del evento de referencia.
+    Estadisticas:
+      type: object
+      required:
+        [percentil_hoy, error_pronostico, dias_en_alerta, mismo_dia_otros_anios, eventos]
+      additionalProperties: false
+      properties:
+        percentil_hoy:
+          oneOf:
+            - $ref: "#/components/schemas/PercentilHoy"
+            - type: "null"
+          description: >
+            `null` si todavía no hay una altura real promediada para hoy.
+        error_pronostico:
+          $ref: "#/components/schemas/ErrorPronostico"
+        dias_en_alerta:
+          type: array
+          items:
+            $ref: "#/components/schemas/RangoAlerta"
+        mismo_dia_otros_anios:
+          type: array
+          items:
+            $ref: "#/components/schemas/MismoDiaAnio"
+        eventos:
+          type: array
+          items:
+            $ref: "#/components/schemas/Evento"
     ErrorResponse:
       type: object
       required: [detail]

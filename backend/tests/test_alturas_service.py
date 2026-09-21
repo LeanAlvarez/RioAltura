@@ -1,13 +1,16 @@
 from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from app.models import Base
 from app.repositories.alturas import AlturaIn, AlturaRow, upsert_alturas
 from app.services.alturas import (
+    altura_en,
     calcular_estado,
     calcular_tendencia_24h,
+    hoy_buenos_aires,
     obtener_ultima,
+    primera_fecha,
     promediar_por_dia,
 )
 from sqlalchemy import Engine, create_engine
@@ -192,3 +195,45 @@ def test_obtener_ultima_entre_21h_y_35h_usa_la_mas_cercana_a_la_ultima() -> None
 
     assert resultado is not None
     assert resultado.tendencia_24h_m == pytest.approx(0.56)
+
+
+# --- altura_en / primera_fecha / hoy_buenos_aires ---
+
+
+def test_altura_en_devuelve_el_promedio_del_dia(engine: Engine) -> None:
+    upsert_alturas(
+        engine,
+        [
+            AlturaIn(fecha_hora=datetime(2026, 9, 21, 3, tzinfo=UTC), altura_m=4.2, fuente="ina"),
+            AlturaIn(fecha_hora=datetime(2026, 9, 21, 15, tzinfo=UTC), altura_m=4.36, fuente="ina"),
+        ],
+    )
+
+    assert altura_en(engine, date(2026, 9, 21)) == pytest.approx(4.29, abs=0.01)
+
+
+def test_altura_en_sin_lecturas_ese_dia_devuelve_none(engine: Engine) -> None:
+    assert altura_en(engine, date(2026, 9, 21)) is None
+
+
+def test_primera_fecha_devuelve_la_fecha_local_mas_antigua(engine: Engine) -> None:
+    upsert_alturas(
+        engine,
+        [
+            AlturaIn(fecha_hora=datetime(2024, 5, 14, 12, tzinfo=UTC), altura_m=9.06, fuente="ina"),
+            # 2023-10-01T01:00Z es 2023-09-30T22:00 local (UTC-3): día local anterior.
+            AlturaIn(fecha_hora=datetime(2023, 10, 1, 1, tzinfo=UTC), altura_m=3.0, fuente="ina"),
+        ],
+    )
+
+    assert primera_fecha(engine) == date(2023, 9, 30)
+
+
+def test_primera_fecha_con_base_vacia_devuelve_none(engine: Engine) -> None:
+    assert primera_fecha(engine) is None
+
+
+def test_hoy_buenos_aires_convierte_desde_utc() -> None:
+    # 2026-09-21T02:00Z es 2026-09-20T23:00 local (UTC-3): todavía el día anterior.
+    assert hoy_buenos_aires(datetime(2026, 9, 21, 2, tzinfo=UTC)) == date(2026, 9, 20)
+    assert hoy_buenos_aires(datetime(2026, 9, 21, 4, tzinfo=UTC)) == date(2026, 9, 21)

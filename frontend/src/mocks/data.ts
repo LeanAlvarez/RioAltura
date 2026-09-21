@@ -1,5 +1,20 @@
-import type { AlturaDiaria, DiaPronostico, HistoricoDia, Pronostico, UltimaAltura } from "../api/types";
-import { CAUDAL_MAX_CALIBRADO_M3S, CURVA_A, CURVA_B, CURVA_C, RANGO_ESTIMACION_M } from "../domain/dominio";
+import type {
+  AlturaDiaria,
+  DiaPronostico,
+  Estadisticas,
+  HistoricoDia,
+  Pronostico,
+  PronosticoAguasArriba,
+  UltimaAltura,
+} from "../api/types";
+import {
+  CAUDAL_MAX_CALIBRADO_M3S,
+  CURVA_A,
+  CURVA_B,
+  CURVA_C,
+  HORIZONTE_ANCLAJE_DIAS,
+  RANGO_ESTIMACION_M,
+} from "../domain/dominio";
 
 /**
  * Realistic fixtures for offline/manual development (`VITE_USE_MOCKS=true`).
@@ -88,30 +103,129 @@ export function mockAlturasDiarias(desde: string, hasta: string, ahora: Date = n
 
 const CAUDALES_PRONOSTICO_M3S = [3500, 4200, 5200, 6300, 7400, 8300, 9100];
 
+/**
+ * El pronóstico de hoy (lead 0) según la curva rara vez coincide con la
+ * altura real de hoy (`mockUltimaAltura`): igual que en producción, se
+ * ancla (spec 007, C2) trasladando el rango hacia el dato medido, con el
+ * sesgo decayendo a 0 en `HORIZONTE_ANCLAJE_DIAS`. Nunca toca `caudal_m3s`.
+ */
 export function mockPronostico(ahora: Date = new Date()): Pronostico {
+  const alturaReal = mockUltimaAltura(ahora).altura_m;
+
   const dias: DiaPronostico[] = CAUDALES_PRONOSTICO_M3S.map((caudal, index) => {
     const alturaEst = Math.round(alturaEstimadaMock(caudal) * 100) / 100;
+    const alturaMin = Math.round((alturaEst - RANGO_ESTIMACION_M) * 100) / 100;
+    const alturaMax = Math.round((alturaEst + RANGO_ESTIMACION_M) * 100) / 100;
     return {
       fecha: fechaISO(addDias(ahora, index)),
       lead_dias: index,
       caudal_m3s: caudal,
       altura_est_m: alturaEst,
-      altura_min_m: Math.round((alturaEst - RANGO_ESTIMACION_M) * 100) / 100,
-      altura_max_m: Math.round((alturaEst + RANGO_ESTIMACION_M) * 100) / 100,
+      altura_min_m: alturaMin,
+      altura_max_m: alturaMax,
+      altura_anclada_m: alturaEst,
+      altura_anclada_min_m: alturaMin,
+      altura_anclada_max_m: alturaMax,
       extrapolado: caudal > CAUDAL_MAX_CALIBRADO_M3S,
     };
   });
 
+  const diaHoy = dias[0];
+  const sesgo = diaHoy ? Math.round((alturaReal - diaHoy.altura_est_m) * 100) / 100 : null;
+
+  const diasAnclados =
+    sesgo === null
+      ? dias
+      : dias.map((dia, index) => {
+          const factor = Math.max(0, 1 - index / HORIZONTE_ANCLAJE_DIAS);
+          const ajuste = sesgo * factor;
+          return {
+            ...dia,
+            altura_anclada_m: Math.round((dia.altura_est_m + ajuste) * 100) / 100,
+            altura_anclada_min_m: Math.round((dia.altura_min_m + ajuste) * 100) / 100,
+            altura_anclada_max_m: Math.round((dia.altura_max_m + ajuste) * 100) / 100,
+          };
+        });
+
   return {
     emitido: new Date(ahora.getTime() - 3 * 3_600_000).toISOString(),
     gauge_id: "hybas_6121320620",
-    dias,
+    dias: diasAnclados,
     aviso: {
       nivel: "sin_aviso",
       umbral_m3s: null,
       primer_dia: null,
       caudal_max_m3s: Math.max(...CAUDALES_PRONOSTICO_M3S.slice(1)),
     },
+    anclaje:
+      sesgo === null || !diaHoy
+        ? {
+            aplicado: false,
+            sesgo_m: null,
+            altura_real_m: null,
+            fecha_referencia: null,
+            motivo: "No hay altura real disponible para hoy",
+          }
+        : {
+            aplicado: true,
+            sesgo_m: sesgo,
+            altura_real_m: alturaReal,
+            fecha_referencia: fechaISO(ahora),
+            motivo: null,
+          },
+  };
+}
+
+const CAUDALES_AGUAS_ARRIBA_M3S = [3000, 3600, 4300, 5100, 5900, 6700, 7500];
+
+/**
+ * Pronóstico del gauge aguas arriba (zona Concordia / Salto Grande, spec 007
+ * T5). No hay altura real medida ahí para anclar contra ella, así que
+ * `altura_anclada_*` queda igual a la estimación de la curva.
+ */
+export function mockPronosticoAguasArriba(ahora: Date = new Date()): PronosticoAguasArriba {
+  const dias: DiaPronostico[] = CAUDALES_AGUAS_ARRIBA_M3S.map((caudal, index) => {
+    const alturaEst = Math.round(alturaEstimadaMock(caudal) * 100) / 100;
+    const alturaMin = Math.round((alturaEst - RANGO_ESTIMACION_M) * 100) / 100;
+    const alturaMax = Math.round((alturaEst + RANGO_ESTIMACION_M) * 100) / 100;
+    return {
+      fecha: fechaISO(addDias(ahora, index)),
+      lead_dias: index,
+      caudal_m3s: caudal,
+      altura_est_m: alturaEst,
+      altura_min_m: alturaMin,
+      altura_max_m: alturaMax,
+      altura_anclada_m: alturaEst,
+      altura_anclada_min_m: alturaMin,
+      altura_anclada_max_m: alturaMax,
+      extrapolado: caudal > CAUDAL_MAX_CALIBRADO_M3S,
+    };
+  });
+
+  return {
+    emitido: new Date(ahora.getTime() - 5 * 3_600_000).toISOString(),
+    gauge_id: "hybas_6120865460",
+    dias,
+  };
+}
+
+/** Fixtures de `/estadisticas` (spec 007): coherentes con los escenarios de referencia de CLAUDE.md §5. */
+export function mockEstadisticas(ahora: Date = new Date()): Estadisticas {
+  return {
+    percentil_hoy: { altura_m: mockUltimaAltura(ahora).altura_m, percentil: 78.4, ventana_dias: 365 },
+    error_pronostico: { lead_dias: 3, muestras: 420, mae_m: 0.5 },
+    dias_en_alerta: [
+      { desde: fechaISO(addDias(ahora, -76)), hasta: fechaISO(addDias(ahora, -70)), max_m: 7.66 },
+    ],
+    mismo_dia_otros_anios: [
+      { anio: ahora.getFullYear() - 2, altura_m: 3.1 },
+      { anio: ahora.getFullYear() - 1, altura_m: 5.8 },
+    ],
+    eventos: [
+      { fecha: "2024-05-14", altura_m: 9.06, etiqueta: "Máximo diario registrado (INA)" },
+      { fecha: "2025-06-29", altura_m: 7.66, etiqueta: "Crecida de referencia" },
+      { fecha: "2026-07-23", altura_m: 4.44, etiqueta: "Costanera inundada" },
+    ],
   };
 }
 

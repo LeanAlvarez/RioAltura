@@ -14,7 +14,7 @@ from app.config.dominio import GAUGE_GOOGLE_AGUAS_ARRIBA, GAUGE_GOOGLE_COLON
 from app.repositories.db import get_engine
 from app.schemas.pronostico import HistoricoDia, Pronostico, PronosticoAguasArriba
 from app.services.avisos import calcular_aviso
-from app.services.pronosticos import listar_historico, obtener_dias
+from app.services.pronosticos import anclar_pronostico, listar_historico, obtener_dias
 
 router = APIRouter(prefix="/pronostico", tags=["pronostico"])
 
@@ -28,8 +28,16 @@ def pronostico(engine: Annotated[Engine, Depends(get_engine)]) -> Pronostico:
     if resultado is None:
         raise HTTPException(status_code=503, detail=_SIN_PRONOSTICO)
     emitido, dias = resultado
+    # El aviso se calcula siempre sobre el caudal pronosticado, nunca sobre
+    # la altura anclada (CLAUDE.md §5): anclar no lo modifica.
+    aviso = calcular_aviso(dias)
+    dias_anclados, anclaje = anclar_pronostico(engine, dias)
     return Pronostico(
-        emitido=emitido, gauge_id=GAUGE_GOOGLE_COLON, dias=dias, aviso=calcular_aviso(dias)
+        emitido=emitido,
+        gauge_id=GAUGE_GOOGLE_COLON,
+        dias=dias_anclados,
+        aviso=aviso,
+        anclaje=anclaje,
     )
 
 

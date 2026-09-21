@@ -1,13 +1,20 @@
 import { defaultFetch } from "./fetch-default";
 import { fetchJson, type FetchResult } from "./client";
-import { isHistoricoDiaList, isPronostico } from "./guards";
-import type { HistoricoDia, Pronostico } from "./types";
+import { isHistoricoDiaList, isPronostico, isPronosticoAguasArriba } from "./guards";
+import type { HistoricoDia, Pronostico, PronosticoAguasArriba } from "./types";
 
 export async function getPronostico(
   fetchFn: typeof fetch = defaultFetch,
   baseUrl?: string,
 ): Promise<FetchResult<Pronostico>> {
   return fetchJson("/pronostico", isPronostico, fetchFn, baseUrl);
+}
+
+export async function getPronosticoAguasArriba(
+  fetchFn: typeof fetch = defaultFetch,
+  baseUrl?: string,
+): Promise<FetchResult<PronosticoAguasArriba>> {
+  return fetchJson("/pronostico/aguas-arriba", isPronosticoAguasArriba, fetchFn, baseUrl);
 }
 
 export async function getPronosticoHistorico(

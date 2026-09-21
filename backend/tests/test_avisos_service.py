@@ -13,6 +13,9 @@ def _dia(lead_dias: int, caudal_m3s: float, fecha: date = date(2026, 9, 20)) -> 
         altura_est_m=0.0,
         altura_min_m=-1.0,
         altura_max_m=1.0,
+        altura_anclada_m=0.0,
+        altura_anclada_min_m=-1.0,
+        altura_anclada_max_m=1.0,
         extrapolado=False,
     )
 

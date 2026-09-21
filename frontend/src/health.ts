@@ -2,37 +2,25 @@ import type { HealthState } from "./api";
 
 export interface HealthView {
   label: string;
-  detail: string;
   tone: "ok" | "warn" | "error" | "muted";
 }
 
-const timeFormatter = new Intl.DateTimeFormat("es-AR", {
-  dateStyle: "short",
-  timeStyle: "short",
-});
-
-export function formatCheckedAt(date: Date, formatter: Intl.DateTimeFormat = timeFormatter): string {
-  return `Actualizado: ${formatter.format(date)}`;
-}
-
+/**
+ * Lenguaje llano (correcciones de diseño, spec 007): "API"/"en línea" es
+ * jerga técnica que un vecino sin conocimientos de sistemas no necesita. No
+ * lleva fecha/hora: la tarjeta "Hoy" ya muestra cuándo midió el INA (§6), y
+ * mezclar ambos "Actualizado" confundía cuál dato era cuál.
+ */
 export function describeHealth(state: HealthState): HealthView {
   switch (state.kind) {
     case "loading":
-      return { label: "Consultando la API…", detail: "", tone: "muted" };
+      return { label: "Consultando…", tone: "muted" };
     case "unreachable":
-      return {
-        label: "API no disponible",
-        detail: formatCheckedAt(state.checkedAt),
-        tone: "error",
-      };
+      return { label: "Sin conexión con los datos", tone: "error" };
     case "ready":
       return state.health.db === "ok"
-        ? { label: "API en línea", detail: formatCheckedAt(state.checkedAt), tone: "ok" }
-        : {
-            label: "API en línea, base de datos con problemas",
-            detail: formatCheckedAt(state.checkedAt),
-            tone: "warn",
-          };
+        ? { label: "Datos al día", tone: "ok" }
+        : { label: "Datos al día, con problemas en la base", tone: "warn" };
   }
 }
 
@@ -44,10 +32,4 @@ export function renderHealth(container: HTMLElement, state: HealthState): void {
   const label = document.createElement("strong");
   label.textContent = view.label;
   container.append(label);
-
-  if (view.detail) {
-    const detail = document.createElement("small");
-    detail.textContent = view.detail;
-    container.append(detail);
-  }
 }

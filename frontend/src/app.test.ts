@@ -1,12 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { loadDashboardData, nivelMaximoEstimado } from "./app";
+import type { Anclaje, UltimaAltura } from "./api/types";
+import { loadDashboardData, medicionActual, nivelMaximoEstimado } from "./app";
 
-const ULTIMA_ALTURA = {
+const ULTIMA_ALTURA: UltimaAltura = {
   fecha_hora: "2026-09-21T14:20:00Z",
   altura_m: 3.67,
   fuente: "ina",
   tendencia_24h_m: 0.12,
   estado: "normal",
+};
+
+const SIN_ANCLAJE: Anclaje = {
+  aplicado: false,
+  sesgo_m: null,
+  altura_real_m: null,
+  fecha_referencia: null,
+  motivo: "No hay altura real disponible para hoy",
 };
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -34,6 +43,7 @@ describe("loadDashboardData", () => {
       gauge_id: "hybas_6121320620",
       dias: [],
       aviso: { nivel: "sin_aviso", umbral_m3s: null, primer_dia: null, caudal_max_m3s: null },
+      anclaje: SIN_ANCLAJE,
     };
     const fetchFn: typeof fetch = async (input) => {
       const url = String(input);
@@ -69,6 +79,9 @@ describe("nivelMaximoEstimado", () => {
             altura_est_m: 99,
             altura_min_m: 98,
             altura_max_m: 100,
+            altura_anclada_m: 99,
+            altura_anclada_min_m: 98,
+            altura_anclada_max_m: 100,
             extrapolado: true,
           },
           {
@@ -78,6 +91,9 @@ describe("nivelMaximoEstimado", () => {
             altura_est_m: 5.9,
             altura_min_m: 4.9,
             altura_max_m: 6.9,
+            altura_anclada_m: 6.4,
+            altura_anclada_min_m: 5.4,
+            altura_anclada_max_m: 7.4,
             extrapolado: false,
           },
           {
@@ -87,12 +103,53 @@ describe("nivelMaximoEstimado", () => {
             altura_est_m: 6.3,
             altura_min_m: 5.3,
             altura_max_m: 7.3,
+            altura_anclada_m: 6.6,
+            altura_anclada_min_m: 5.6,
+            altura_anclada_max_m: 7.6,
             extrapolado: false,
           },
         ],
         aviso: { nivel: "sin_aviso", umbral_m3s: null, primer_dia: null, caudal_max_m3s: null },
+        anclaje: {
+          aplicado: true,
+          sesgo_m: 0.5,
+          altura_real_m: 6.4,
+          fecha_referencia: "2026-09-21",
+          motivo: null,
+        },
       },
     });
-    expect(nivel).toBe(6.3);
+    // Anclado: la altura_anclada_m máxima entre lead >= 1 es la del 23/9 (6,6), no la altura_est_m cruda (6,3).
+    expect(nivel).toBe(6.6);
+  });
+});
+
+describe("medicionActual", () => {
+  it("es null cuando la altura de hoy no está disponible", () => {
+    expect(medicionActual({ kind: "error" })).toBeNull();
+    expect(medicionActual({ kind: "not-found" })).toBeNull();
+  });
+
+  it("devuelve la altura medida con su fecha, marcada como reciente", () => {
+    // Dos horas después de la medición: dentro de HORAS_DATO_VIEJO.
+    const ahora = new Date("2026-09-21T16:20:00Z");
+    expect(medicionActual({ kind: "ok", data: ULTIMA_ALTURA }, ahora)).toEqual({
+      alturaM: 3.67,
+      fechaHora: expect.any(String) as unknown as string,
+      reciente: true,
+    });
+  });
+
+  it("marca como no reciente una medición vieja, pero la devuelve igual", () => {
+    // El mapa abre igual en la medición vieja: nunca cae al pronóstico.
+    const ahora = new Date("2026-09-22T14:20:00Z");
+    const medicion = medicionActual({ kind: "ok", data: ULTIMA_ALTURA }, ahora);
+    expect(medicion?.alturaM).toBe(3.67);
+    expect(medicion?.reciente).toBe(false);
+  });
+
+  it("es null si la fecha de la medición no se puede interpretar", () => {
+    const rota = { ...ULTIMA_ALTURA, fecha_hora: "no es una fecha" };
+    expect(medicionActual({ kind: "ok", data: rota })).toBeNull();
   });
 });
