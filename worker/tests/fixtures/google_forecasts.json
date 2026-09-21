@@ -1,0 +1,70 @@
+{
+  "forecasts": {
+    "hybas_6121320620": {
+      "forecasts": [
+        {
+          "issuedTime": "2026-09-19T08:15:00.123456Z",
+          "gaugeId": "hybas_6121320620",
+          "forecastRanges": [
+            {
+              "value": 6100.5,
+              "forecastStartTime": "2026-09-18T00:00:00Z",
+              "forecastEndTime": "2026-09-19T00:00:00Z"
+            },
+            {
+              "value": 6250.0,
+              "forecastStartTime": "2026-09-19T00:00:00Z",
+              "forecastEndTime": "2026-09-20T00:00:00Z"
+            },
+            {
+              "value": 6400.75,
+              "forecastStartTime": "2026-09-20T00:00:00Z",
+              "forecastEndTime": "2026-09-21T00:00:00Z"
+            }
+          ]
+        },
+        {
+          "issuedTime": "2026-09-19T20:45:00.987654Z",
+          "gaugeId": "hybas_6121320620",
+          "forecastRanges": [
+            {
+              "value": 6180.0,
+              "forecastStartTime": "2026-09-19T00:00:00Z",
+              "forecastEndTime": "2026-09-20T00:00:00Z"
+            },
+            {
+              "value": 12836.0,
+              "forecastStartTime": "2026-09-20T00:00:00Z",
+              "forecastEndTime": "2026-09-21T00:00:00Z"
+            },
+            {
+              "value": 15200.25,
+              "forecastStartTime": "2026-09-21T00:00:00Z",
+              "forecastEndTime": "2026-09-22T00:00:00Z"
+            }
+          ]
+        }
+      ]
+    },
+    "hybas_6120865460": {
+      "forecasts": [
+        {
+          "issuedTime": "2026-09-19T08:15:00.123456Z",
+          "gaugeId": "hybas_6120865460",
+          "forecastRanges": [
+            {
+              "value": 5800.0,
+              "forecastStartTime": "2026-09-19T00:00:00Z",
+              "forecastEndTime": "2026-09-20T00:00:00Z"
+            },
+            {
+              "value": 5900.0,
+              "forecastStartTime": "2026-09-20T00:00:00Z",
+              "forecastEndTime": "2026-09-21T00:00:00Z"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

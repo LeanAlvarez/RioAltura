@@ -7,6 +7,11 @@ from jobs.alturas import (
     ALTURAS_INTERVAL_SECONDS,
     job_actualizar_alturas,
 )
+from jobs.google import (
+    PRONOSTICOS_FIRST_RUN_DELAY_SECONDS,
+    PRONOSTICOS_INTERVAL_SECONDS,
+    job_actualizar_pronosticos,
+)
 from jobs.heartbeat import HEARTBEAT_INTERVAL_SECONDS, heartbeat
 from jobs.scheduler import build_scheduler
 
@@ -34,6 +39,20 @@ def test_registra_el_job_alturas_cada_hora() -> None:
     # Never runs immediately: the worker process test must not touch real sources.
     delay = (job.next_run_time - datetime.now(UTC)).total_seconds()
     assert 0 < delay <= ALTURAS_FIRST_RUN_DELAY_SECONDS == 60
+
+
+def test_registra_el_job_pronosticos_cada_6_horas() -> None:
+    scheduler = build_scheduler()
+
+    job = scheduler.get_job("pronosticos")
+
+    assert job is not None
+    assert isinstance(job.trigger, IntervalTrigger)
+    assert job.trigger.interval.total_seconds() == PRONOSTICOS_INTERVAL_SECONDS == 6 * 3600
+    assert job.func is job_actualizar_pronosticos
+    # Never runs immediately: the worker process test must not touch Google.
+    delay = (job.next_run_time - datetime.now(UTC)).total_seconds()
+    assert 0 < delay <= PRONOSTICOS_FIRST_RUN_DELAY_SECONDS == 90
 
 
 def test_heartbeat_solo_loguea(caplog) -> None:

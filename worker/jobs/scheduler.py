@@ -11,6 +11,11 @@ from jobs.alturas import (
     ALTURAS_INTERVAL_SECONDS,
     job_actualizar_alturas,
 )
+from jobs.google import (
+    PRONOSTICOS_FIRST_RUN_DELAY_SECONDS,
+    PRONOSTICOS_INTERVAL_SECONDS,
+    job_actualizar_pronosticos,
+)
 from jobs.heartbeat import HEARTBEAT_INTERVAL_SECONDS, heartbeat
 
 logger = logging.getLogger(__name__)
@@ -35,6 +40,14 @@ def build_scheduler() -> BlockingScheduler:
         # external and a fresh process should not hit them before it is
         # healthy. Failures are caught and logged inside the job.
         next_run_time=datetime.now(UTC) + timedelta(seconds=ALTURAS_FIRST_RUN_DELAY_SECONDS),
+    )
+    scheduler.add_job(
+        job_actualizar_pronosticos,
+        "interval",
+        seconds=PRONOSTICOS_INTERVAL_SECONDS,
+        id="pronosticos",
+        # Same rationale as "alturas": never touch Google right at startup.
+        next_run_time=datetime.now(UTC) + timedelta(seconds=PRONOSTICOS_FIRST_RUN_DELAY_SECONDS),
     )
     return scheduler
 

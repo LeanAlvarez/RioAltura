@@ -98,6 +98,134 @@ paths:
               examples:
                 rangoMaximo:
                   value: { detail: "El rango máximo es de 3 años" }
+  /pronostico:
+    get:
+      operationId: getPronostico
+      summary: Pronóstico de Google para Colón (rango de altura y nivel de aviso)
+      tags: [pronostico]
+      responses:
+        "200":
+          description: Última emisión guardada del gauge de Colón, con su nivel de aviso.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pronostico"
+              examples:
+                alertaProbable:
+                  value:
+                    emitido: "2026-09-19T20:45:00.987654Z"
+                    gauge_id: hybas_6121320620
+                    dias:
+                      - fecha: "2026-09-19"
+                        lead_dias: 0
+                        caudal_m3s: 6180.0
+                        altura_est_m: 5.9
+                        altura_min_m: 4.9
+                        altura_max_m: 6.9
+                        extrapolado: false
+                      - fecha: "2026-09-20"
+                        lead_dias: 1
+                        caudal_m3s: 12836.0
+                        altura_est_m: 7.07
+                        altura_min_m: 6.07
+                        altura_max_m: 8.07
+                        extrapolado: false
+                    aviso:
+                      nivel: alerta_probable
+                      umbral_m3s: 11000
+                      primer_dia: "2026-09-20"
+                      caudal_max_m3s: 12836.0
+        "503":
+          description: Todavía no hay ningún pronóstico de Google guardado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                sinDatos:
+                  value: { detail: "Todavía no hay un pronóstico de Google cargado" }
+  /pronostico/historico:
+    get:
+      operationId: getPronosticoHistorico
+      summary: Serie histórica del caudal pronosticado a un lead fijo, para comparar con la altura real
+      tags: [pronostico]
+      parameters:
+        - name: lead
+          in: query
+          required: true
+          description: Días de anticipación del pronóstico a comparar (0 a 7).
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 7
+        - name: desde
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: >
+            Un valor por día desde `desde`, tomando (si hubo más de una
+            emisión) la más reciente para ese día y ese `lead`.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoricoDia"
+              examples:
+                serie:
+                  value:
+                    - fecha: "2026-09-19"
+                      caudal_m3s: 6180.0
+                      altura_est_m: 5.90
+                      extrapolado: false
+                    - fecha: "2026-09-20"
+                      caudal_m3s: 12836.0
+                      altura_est_m: 7.07
+                      extrapolado: false
+        "422":
+          description: Parámetros faltantes o fuera de rango.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pronostico/aguas-arriba:
+    get:
+      operationId: getPronosticoAguasArriba
+      summary: Pronóstico de Google para el gauge aguas arriba (zona Concordia / Salto Grande)
+      tags: [pronostico]
+      responses:
+        "200":
+          description: Última emisión guardada del gauge aguas arriba (sin nivel de aviso).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PronosticoAguasArriba"
+              examples:
+                sinAviso:
+                  value:
+                    emitido: "2026-09-19T08:15:00.123456Z"
+                    gauge_id: hybas_6120865460
+                    dias:
+                      - fecha: "2026-09-19"
+                        lead_dias: 0
+                        caudal_m3s: 5800.0
+                        altura_est_m: 5.55
+                        altura_min_m: 4.55
+                        altura_max_m: 6.55
+                        extrapolado: false
+        "503":
+          description: Todavía no hay ningún pronóstico de Google guardado para este gauge.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                sinDatos:
+                  value: { detail: "Todavía no hay un pronóstico de Google cargado" }
 components:
   schemas:
     HealthResponse:
@@ -150,6 +278,109 @@ components:
         altura_m:
           type: number
           description: Promedio diario de altura real, en metros sobre el cero local.
+    DiaPronostico:
+      type: object
+      required:
+        [fecha, lead_dias, caudal_m3s, altura_est_m, altura_min_m, altura_max_m, extrapolado]
+      additionalProperties: false
+      properties:
+        fecha:
+          type: string
+          format: date
+        lead_dias:
+          type: integer
+          description: Días de anticipación de este pronóstico respecto de la emisión (`emitido`).
+        caudal_m3s:
+          type: number
+          description: Caudal pronosticado por Google, en metros cúbicos por segundo.
+        altura_est_m:
+          type: number
+          description: >
+            Altura estimada del puerto a partir del caudal (curva de calibración). Se
+            muestra siempre junto con `altura_min_m`/`altura_max_m`, nunca como número exacto.
+        altura_min_m:
+          type: number
+          description: Extremo inferior del rango de altura estimada (`altura_est_m - 1,0 m`).
+        altura_max_m:
+          type: number
+          description: Extremo superior del rango de altura estimada (`altura_est_m + 1,0 m`).
+        extrapolado:
+          type: boolean
+          description: >
+            `true` si `caudal_m3s` supera el caudal máximo con el que se calibró la curva
+            (`CAUDAL_MAX_CALIBRADO_M3S` = 15.000 m³/s): la altura estimada es una extrapolación.
+    AvisoPronostico:
+      type: object
+      required: [nivel, umbral_m3s, primer_dia, caudal_max_m3s]
+      additionalProperties: false
+      properties:
+        nivel:
+          type: string
+          enum: [sin_aviso, atencion, alerta_probable]
+          description: >
+            Nivel de aviso según el caudal pronosticado a 1-7 días para el gauge de Colón.
+            No es el mismo umbral (ni la misma fuente) que `estado` en `/alturas/ultima`.
+        umbral_m3s:
+          type: [number, "null"]
+          description: Umbral (m³/s) que determinó `nivel`; `null` si `nivel` es `sin_aviso`.
+        primer_dia:
+          type: [string, "null"]
+          format: date
+          description: >
+            Primer día (por fecha) que cruza `umbral_m3s`; `null` si `nivel` es `sin_aviso`.
+        caudal_max_m3s:
+          type: [number, "null"]
+          description: >
+            Caudal máximo pronosticado entre los días considerados (lead 1 a 7); `null`
+            si no hay ningún día en esa ventana.
+    Pronostico:
+      type: object
+      required: [emitido, gauge_id, dias, aviso]
+      additionalProperties: false
+      properties:
+        emitido:
+          type: string
+          format: date-time
+          description: Momento de emisión del pronóstico usado (la última emisión guardada), en UTC.
+        gauge_id:
+          type: string
+          description: Identificador del gauge de Google (Colón).
+        dias:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiaPronostico"
+          description: Solo días con `lead_dias >= 0`, ordenados por fecha ascendente.
+        aviso:
+          $ref: "#/components/schemas/AvisoPronostico"
+    PronosticoAguasArriba:
+      type: object
+      required: [emitido, gauge_id, dias]
+      additionalProperties: false
+      properties:
+        emitido:
+          type: string
+          format: date-time
+        gauge_id:
+          type: string
+          description: Identificador del gauge de Google aguas arriba (zona Concordia / Salto Grande).
+        dias:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiaPronostico"
+    HistoricoDia:
+      type: object
+      required: [fecha, caudal_m3s, altura_est_m, extrapolado]
+      additionalProperties: false
+      properties:
+        fecha:
+          type: string
+          format: date
+        caudal_m3s:
+          type: number
+        altura_est_m:
+          type: number
+        extrapolado:
+          type: boolean
     ErrorResponse:
       type: object
       required: [detail]
