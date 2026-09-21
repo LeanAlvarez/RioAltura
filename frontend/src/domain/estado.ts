@@ -11,7 +11,7 @@ export interface EstadoView {
 
 const ESTADOS: Record<EstadoAltura, EstadoView> = {
   normal: { label: "Normal", tono: "ok" },
-  evacuacion_en_seco: { label: "Evacuación en seco", tono: "warn" },
+  evacuacion_en_seco: { label: "Evacuación preventiva", tono: "warn" },
   alerta: { label: "Alerta", tono: "error" },
   evacuacion: { label: "Evacuación", tono: "danger" },
 };

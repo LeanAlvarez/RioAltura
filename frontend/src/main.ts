@@ -2,11 +2,13 @@ import "./style.css";
 import { fetchHealth } from "./api";
 import { getPronostico, getPronosticoAguasArriba } from "./api/pronostico";
 import { renderHealth } from "./health";
-import { loadDashboardData, nivelActualEstimado, nivelMaximoEstimado } from "./app";
+import { loadDashboardData, medicionActual, nivelMaximoEstimado } from "./app";
 import { deriveEstadoHoyView, renderEstadoHoy } from "./components/estadoHoy";
 import { deriveProximosDiasView, renderProximosDias } from "./components/proximosDias";
 import { mountGrafico } from "./components/grafico";
 import { mountMapa } from "./components/mapa";
+import { deriveQueHacerView, renderQueHacer } from "./components/queHacer";
+import { deriveUmbralesView, renderUmbrales } from "./components/umbrales";
 import { mountSuperficieAfectada } from "./components/superficieAfectada";
 import { mountAguasArriba } from "./components/aguasArriba";
 import { mountContexto } from "./components/contexto";
@@ -29,6 +31,8 @@ app.innerHTML = `
   <main class="dashboard">
     <section id="tarjeta-hoy" class="card" aria-live="polite"></section>
     <section id="tarjeta-proximos" class="card" aria-live="polite"></section>
+    <section id="tarjeta-que-hacer" class="card" aria-live="polite" hidden></section>
+    <section id="tarjeta-umbrales" class="card"></section>
     <section id="tarjeta-grafico" class="card card--grafico"></section>
     <section id="tarjeta-mapa" class="card card--mapa" aria-label="Mapa de Colón"></section>
     <!--
@@ -50,6 +54,8 @@ app.innerHTML = `
 const healthEl = document.querySelector<HTMLDivElement>("#health");
 const hoyEl = document.querySelector<HTMLElement>("#tarjeta-hoy");
 const proximosEl = document.querySelector<HTMLElement>("#tarjeta-proximos");
+const queHacerEl = document.querySelector<HTMLElement>("#tarjeta-que-hacer");
+const umbralesEl = document.querySelector<HTMLElement>("#tarjeta-umbrales");
 const graficoEl = document.querySelector<HTMLElement>("#tarjeta-grafico");
 const mapaEl = document.querySelector<HTMLElement>("#tarjeta-mapa");
 const superficieEl = document.querySelector<HTMLElement>("#tarjeta-superficie");
@@ -63,6 +69,8 @@ if (
   !healthEl ||
   !hoyEl ||
   !proximosEl ||
+  !queHacerEl ||
+  !umbralesEl ||
   !graficoEl ||
   !mapaEl ||
   !superficieEl ||
@@ -81,6 +89,8 @@ void fetchHealth().then((state) => renderHealth(healthEl, state));
 
 renderEstadoHoy(hoyEl, deriveEstadoHoyView({ kind: "loading" }, new Date()));
 renderProximosDias(proximosEl, deriveProximosDiasView({ kind: "loading" }, new Date()));
+renderUmbrales(umbralesEl, deriveUmbralesView(null));
+renderQueHacer(queHacerEl, null);
 renderPie(pieEl);
 mountGrafico(graficoEl);
 mountSuperficieAfectada(superficieEl);
@@ -93,5 +103,10 @@ mountDetalleTecnico(detalleEl, { getPronostico, getPronosticoAguasArriba });
 void loadDashboardData().then(({ altura, pronostico }) => {
   renderEstadoHoy(hoyEl, deriveEstadoHoyView(altura, new Date()));
   renderProximosDias(proximosEl, deriveProximosDiasView(pronostico, new Date()));
-  void mountMapa(mapaEl, nivelMaximoEstimado(pronostico), nivelActualEstimado(altura));
+  renderUmbrales(umbralesEl, deriveUmbralesView(altura.kind === "ok" ? altura.data.altura_m : null));
+  renderQueHacer(
+    queHacerEl,
+    pronostico.kind === "ok" ? deriveQueHacerView(pronostico.data.aviso.nivel) : null,
+  );
+  void mountMapa(mapaEl, nivelMaximoEstimado(pronostico), medicionActual(altura));
 });

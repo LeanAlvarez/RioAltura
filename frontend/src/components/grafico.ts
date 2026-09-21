@@ -112,7 +112,7 @@ const THRESHOLD_DEFS: ReadonlyArray<{
   fallback: string;
   dash: number[];
 }> = [
-  { valor: EVACUACION_EN_SECO_M, label: "Evacuación en seco", variable: "--warn", fallback: "#a35d00", dash: [4, 4] },
+  { valor: EVACUACION_EN_SECO_M, label: "Evacuación preventiva", variable: "--warn", fallback: "#a35d00", dash: [4, 4] },
   { valor: ALERTA_M, label: "Alerta", variable: "--error", fallback: "#b3261e", dash: [7, 3] },
   {
     valor: EVACUACION_M,

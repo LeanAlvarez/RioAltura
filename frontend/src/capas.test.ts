@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  CapaIndexError,
-  SELECCION_INICIAL,
   avisoFueraDeRango,
+  type CapaEntry,
+  type CapaFeatureCollection,
+  type CapaIndex,
+  CapaIndexError,
   createCapaCache,
   createEstadoMapa,
   fetchCapaIndex,
@@ -10,11 +12,9 @@ import {
   formatCota,
   formatHectareas,
   isCapaIndex,
+  type MedicionActual,
   resolveNivel,
   textoMostrando,
-  type CapaEntry,
-  type CapaFeatureCollection,
-  type CapaIndex,
   type VistaMapa,
 } from "./capas";
 
@@ -218,60 +218,87 @@ describe("formato es-AR", () => {
 });
 
 describe("createEstadoMapa", () => {
-  it("arranca en la selección inicial (referencia costanera) hasta que llegue un pronóstico", () => {
+  const medicion = (alturaM: number, reciente = true): MedicionActual => ({
+    alturaM,
+    fechaHora: "21/9/26, 00:00",
+    reciente,
+  });
+
+  it("arranca sin capa hasta que llega la medición de hoy", () => {
     const estado = createEstadoMapa(index);
     let vista: VistaMapa | undefined;
-    const unsubscribe = estado.subscribe((v) => {
-      vista = v;
-    });
-    expect(vista?.seleccion).toBe(SELECCION_INICIAL);
-    unsubscribe();
+    estado.subscribe((v) => (vista = v));
+
+    expect(vista?.seleccion).toBeNull();
+    expect(vista?.resuelto).toBeNull();
+    expect(vista?.textos.sinSeleccion).toBe("Elegí un escenario para ver las zonas inundables");
   });
 
-  it("setNivelPronosticado mueve el mapa mientras el usuario no tocó nada", () => {
+  it("el mapa abre en la altura medida de hoy, no en el pronóstico", () => {
     const estado = createEstadoMapa(index);
-    const vistas: number[] = [];
-    estado.subscribe((v) => vistas.push(v.seleccion));
-
-    estado.setNivelPronosticado(6.2);
-    expect(vistas.at(-1)).toBe(6.2);
-
-    estado.setNivelPronosticado(6.5);
-    expect(vistas.at(-1)).toBe(6.5);
-  });
-
-  it("una vez que el usuario elige, setNivelPronosticado ya no mueve el mapa", () => {
-    const estado = createEstadoMapa(index);
-    const vistas: number[] = [];
-    estado.subscribe((v) => vistas.push(v.seleccion));
-
-    estado.seleccionar(7.1, { porUsuario: true });
-    expect(vistas.at(-1)).toBe(7.1);
+    let vista: VistaMapa | undefined;
+    estado.subscribe((v) => (vista = v));
 
     estado.setNivelPronosticado(9.0);
-    expect(vistas.at(-1)).toBe(7.1);
+    expect(vista?.seleccion).toBeNull();
+
+    estado.setNivelActual(medicion(4.29));
+    expect(vista?.seleccion).toBe(4.29);
+    expect(vista?.textos.actual).toBe("4,29 m");
   });
 
-  it("setNivelActual habilita 'Hoy' pero nunca mueve el mapa por sí solo", () => {
+  it("setNivelPronosticado sólo habilita su botón y nunca mueve el mapa", () => {
     const estado = createEstadoMapa(index);
-    const vistas: Array<ReturnType<typeof estado.escenarios>> = [];
-    let seleccionActual = 0;
-    let ultimaVista: VistaMapa | undefined;
-    estado.subscribe((v) => {
-      vistas.push(v.escenarios);
-      seleccionActual = v.seleccion;
-      ultimaVista = v;
-    });
+    let vista: VistaMapa | undefined;
+    estado.subscribe((v) => (vista = v));
 
-    expect(ultimaVista?.textos.actual).toBeNull();
-    expect(seleccionActual).toBe(SELECCION_INICIAL);
-    estado.setNivelActual(5.1);
-    expect(seleccionActual).toBe(SELECCION_INICIAL);
-    const hoy = vistas.at(-1)?.find((e) => e.id === "hoy");
-    expect(hoy).toEqual({ id: "hoy", etiqueta: "Hoy", h: 5.1, habilitado: true });
-    // ítem 3 (correcciones de diseño 007): el resumen siempre visible del
-    // mapa necesita la altura de hoy formateada, no solo el escenario.
-    expect(ultimaVista?.textos.actual).toBe("5,10 m");
+    estado.setNivelActual(medicion(4.29));
+    estado.setNivelPronosticado(6.5);
+
+    expect(vista?.seleccion).toBe(4.29);
+    const pronostico = vista?.escenarios.find((e) => e.id === "pronostico");
+    expect(pronostico).toEqual({
+      id: "pronostico",
+      etiqueta: "Pronóstico máx.",
+      h: 6.5,
+      habilitado: true,
+    });
+  });
+
+  it("una vez que el usuario elige, la medición ya no mueve el mapa", () => {
+    const estado = createEstadoMapa(index);
+    let vista: VistaMapa | undefined;
+    estado.subscribe((v) => (vista = v));
+
+    estado.seleccionar(7.1, { porUsuario: true });
+    expect(vista?.seleccion).toBe(7.1);
+
+    estado.setNivelActual(medicion(4.29));
+    expect(vista?.seleccion).toBe(7.1);
+  });
+
+  it("una medición vieja abre el mapa igual, pero rotulada con su fecha", () => {
+    const estado = createEstadoMapa(index);
+    let vista: VistaMapa | undefined;
+    estado.subscribe((v) => (vista = v));
+
+    estado.setNivelActual(medicion(4.29, false));
+    expect(vista?.seleccion).toBe(4.29);
+    expect(vista?.textos.medicion).toBe("Última medición: 21/9/26, 00:00");
+  });
+
+  it("habilita 'Hoy' con la altura medida", () => {
+    const estado = createEstadoMapa(index);
+    let vista: VistaMapa | undefined;
+    estado.subscribe((v) => (vista = v));
+
+    estado.setNivelActual(medicion(5.1));
+    expect(vista?.escenarios.find((e) => e.id === "hoy")).toEqual({
+      id: "hoy",
+      etiqueta: "Hoy",
+      h: 5.1,
+      habilitado: true,
+    });
   });
 
   it("escenarios mantiene el orden fijo y arranca con hoy/pronóstico deshabilitados", () => {
@@ -285,6 +312,7 @@ describe("createEstadoMapa", () => {
       "alerta",
       "crecida_2025",
       "evacuacion",
+      "crecida_2019",
       "maximo_2024",
     ]);
     expect(escenarios[0]).toEqual({ id: "hoy", etiqueta: "Hoy", h: null, habilitado: false });

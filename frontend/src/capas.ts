@@ -285,15 +285,20 @@ export interface Escenario {
 }
 
 export interface VistaMapa {
-  seleccion: number;
-  resuelto: ResolvedNivel;
+  /** null mientras no haya medición ni elección del usuario: el mapa va sin capa. */
+  seleccion: number | null;
+  resuelto: ResolvedNivel | null;
   escenarios: Escenario[];
   textos: {
-    altura: string;
-    cota: string;
-    hectareas: string;
+    altura: string | null;
+    cota: string | null;
+    hectareas: string | null;
     mostrando: string | null;
     fueraDeRango: string | null;
+    /** "Última medición: ..." cuando el dato real no es reciente. */
+    medicion: string | null;
+    /** Texto que reemplaza la lectura cuando no hay ninguna capa elegida. */
+    sinSeleccion: string | null;
     /**
      * Altura real medida hoy, formateada (o null hasta que llegue). Spec
      * 007, correcciones de diseño ítem 3: el resumen siempre visible del
@@ -304,28 +309,51 @@ export interface VistaMapa {
   };
 }
 
+/** Cuándo se midió la altura real, para rotular el arranque del mapa. */
+export interface MedicionActual {
+  alturaM: number;
+  fechaHora: string;
+  reciente: boolean;
+}
+
 export interface EstadoMapa {
-  setNivelActual(h: number): void;
+  setNivelActual(medicion: MedicionActual): void;
   setNivelPronosticado(h: number): void;
   seleccionar(h: number, opts: { porUsuario: boolean }): void;
   escenarios(): Escenario[];
   subscribe(listener: (vista: VistaMapa) => void): () => void;
 }
 
-/** Initial selection before any forecast arrives: the costanera reference (jul 2026). */
+/**
+ * Reference height used only when a scenario button needs a default; the map
+ * itself no longer opens on a fixed level (see `createEstadoMapa`).
+ */
 export const SELECCION_INICIAL = 4.44;
 
+/**
+ * The map opens on the height the river is at TODAY, never on a forecast
+ * (spec 007, decisión del usuario tras la revisión de diseño; reemplaza el
+ * M3 original). Mostrar primero el peor caso hacía que un vecino viera agua
+ * sobre su barrio y creyera que era la situación actual. Si no hay medición
+ * reciente se usa la última guardada, rotulada con su fecha, y si no hay
+ * ninguna el mapa abre sin capa: nunca se cae al pronóstico.
+ */
 export function createEstadoMapa(index: CapaIndex): EstadoMapa {
-  let nivelActual: number | null = null;
+  let medicionActual: MedicionActual | null = null;
   let nivelPronosticado: number | null = null;
-  let seleccion = SELECCION_INICIAL;
+  let seleccion: number | null = null;
   let tocadoPorUsuario = false;
 
   const listeners = new Set<(vista: VistaMapa) => void>();
 
   function construirEscenarios(): Escenario[] {
     return [
-      { id: "hoy", etiqueta: "Hoy", h: nivelActual, habilitado: nivelActual !== null },
+      {
+        id: "hoy",
+        etiqueta: "Hoy",
+        h: medicionActual?.alturaM ?? null,
+        habilitado: medicionActual !== null,
+      },
       {
         id: "pronostico",
         etiqueta: "Pronóstico máx.",
@@ -337,11 +365,31 @@ export function createEstadoMapa(index: CapaIndex): EstadoMapa {
       { id: "alerta", etiqueta: "7,10 alerta", h: 7.1, habilitado: true },
       { id: "crecida_2025", etiqueta: "7,60 crecida jun 2025", h: 7.6, habilitado: true },
       { id: "evacuacion", etiqueta: "7,90 evacuación", h: 7.9, habilitado: true },
+      { id: "crecida_2019", etiqueta: "8,87 ene 2019", h: 8.87, habilitado: true },
       { id: "maximo_2024", etiqueta: "9,06 máx. may 2024", h: 9.06, habilitado: true },
     ];
   }
 
   function vistaActual(): VistaMapa {
+    if (seleccion === null) {
+      // No measurement yet and the user has not picked anything: show the map
+      // with no layer rather than guessing a height.
+      return {
+        seleccion: null,
+        resuelto: null,
+        escenarios: construirEscenarios(),
+        textos: {
+          altura: null,
+          cota: null,
+          hectareas: null,
+          mostrando: null,
+          fueraDeRango: null,
+          actual: null,
+          medicion: null,
+          sinSeleccion: "Elegí un escenario para ver las zonas inundables",
+        },
+      };
+    }
     const resuelto = resolveNivel(index, seleccion);
     return {
       seleccion,
@@ -353,7 +401,12 @@ export function createEstadoMapa(index: CapaIndex): EstadoMapa {
         hectareas: formatHectareas(resuelto.entry.hectareas),
         mostrando: resuelto.redondeado ? textoMostrando(resuelto.mostrado, seleccion) : null,
         fueraDeRango: resuelto.fueraDeRango === "arriba" ? avisoFueraDeRango(index) : null,
-        actual: nivelActual === null ? null : formatAltura(nivelActual),
+        actual: medicionActual === null ? null : formatAltura(medicionActual.alturaM),
+        medicion:
+          medicionActual === null || medicionActual.reciente
+            ? null
+            : `Última medición: ${medicionActual.fechaHora}`,
+        sinSeleccion: null,
       },
     };
   }
@@ -364,19 +417,20 @@ export function createEstadoMapa(index: CapaIndex): EstadoMapa {
   }
 
   return {
-    setNivelActual(h) {
-      // Never moves the map by itself: only enables the "Hoy" button.
-      nivelActual = h;
+    setNivelActual(medicion) {
+      medicionActual = medicion;
+      // The measured height is what the map opens on, until the user takes
+      // control with the slider or a scenario button.
+      if (!tocadoPorUsuario) {
+        seleccion = medicion.alturaM;
+      }
       notify();
     },
     setNivelPronosticado(h) {
+      // Only enables the "Pronóstico máx." button. It must never move the map
+      // on its own: a forecast shown where the user expects a measurement is
+      // read as the current situation.
       nivelPronosticado = h;
-      // Follows the forecast only until the user takes control (slider or a
-      // scenario button); repeated calls before that keep tracking a later
-      // forecast so the map reflects the most recent one on load.
-      if (!tocadoPorUsuario) {
-        seleccion = h;
-      }
       notify();
     },
     seleccionar(h, { porUsuario }) {

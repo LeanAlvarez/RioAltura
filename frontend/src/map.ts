@@ -1,13 +1,14 @@
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import {
-  createCapaCache,
-  createEstadoMapa,
-  fetchCapaIndex,
   type CapaCache,
   type CapaEntry,
   type CapaIndex,
+  createCapaCache,
+  createEstadoMapa,
   type EstadoMapa,
+  fetchCapaIndex,
+  type MedicionActual,
   type VistaMapa,
 } from "./capas";
 
@@ -65,7 +66,7 @@ function formatGenerado(iso: string): string {
 
 export interface MapaInundacion {
   map: L.Map;
-  setNivelActual(h: number): void;
+  setNivelActual(medicion: MedicionActual): void;
   setNivelPronosticado(h: number): void;
   /** Selecciona una altura por código (spec 007 T7: sincronización con la curva de hectáreas). */
   seleccionar(h: number): void;
@@ -208,12 +209,16 @@ function crearPanel(container: HTMLElement, index: CapaIndex, estado: EstadoMapa
 
   return {
     render(vista) {
-      alturaEl.textContent = vista.textos.altura;
-      hectareasEl.textContent = vista.textos.hectareas;
-      mostrandoEl.textContent = vista.textos.mostrando ?? "";
-      zonasEl.textContent = `Si el río llega a ${vista.textos.altura}, estas zonas podrían inundarse.`;
-      slider.value = String(vista.seleccion);
-      slider.setAttribute("aria-valuetext", vista.textos.altura);
+      const sinCapa = vista.seleccion === null || vista.textos.altura === null;
+      alturaEl.textContent = vista.textos.altura ?? "";
+      hectareasEl.textContent = vista.textos.hectareas ?? "";
+      mostrandoEl.textContent = vista.textos.medicion ?? vista.textos.mostrando ?? "";
+      zonasEl.textContent = sinCapa
+        ? (vista.textos.sinSeleccion ?? "")
+        : `Si el río llega a ${vista.textos.altura ?? ""}, estas zonas podrían inundarse.`;
+      slider.disabled = sinCapa;
+      if (vista.seleccion !== null) slider.value = String(vista.seleccion);
+      slider.setAttribute("aria-valuetext", vista.textos.altura ?? "sin escenario elegido");
 
       for (const escenario of vista.escenarios) {
         const boton = botones.get(escenario.id);
@@ -292,19 +297,19 @@ export function createMap(container: HTMLElement): MapaInundacion {
   avisoModelo.addTo(map);
 
   let destroyed = false;
-  let pendienteActual: number | null = null;
+  let pendienteActual: MedicionActual | null = null;
   let pendientePronosticado: number | null = null;
   let pendienteSeleccion: number | null = null;
 
   // Until (or unless) index.json loads, the public API is a no-op that just
   // remembers the last requested values — spec 005 can call it unconditionally.
   let api: {
-    setNivelActual(h: number): void;
+    setNivelActual(medicion: MedicionActual): void;
     setNivelPronosticado(h: number): void;
     seleccionar(h: number): void;
   } = {
-    setNivelActual(h) {
-      pendienteActual = h;
+    setNivelActual(medicion) {
+      pendienteActual = medicion;
     },
     setNivelPronosticado(h) {
       pendientePronosticado = h;
@@ -332,10 +337,19 @@ export function createMap(container: HTMLElement): MapaInundacion {
       estado.subscribe((vista) => {
         resumen.render(vista);
         panel.render(vista);
+        if (vista.seleccion === null || vista.resuelto === null) {
+          // Nothing chosen yet: leave the map bare instead of drawing a guess.
+          if (capaActual) {
+            map.removeLayer(capaActual);
+            capaActual = null;
+          }
+          return;
+        }
+        const resuelto = vista.resuelto;
         emitirSeleccion(vista.seleccion);
         const miSolicitud = ++solicitudId;
         cache
-          .get(vista.resuelto.entry)
+          .get(resuelto.entry)
           .then((coleccion) => {
             if (destroyed || miSolicitud !== solicitudId) return;
             const nuevaCapa = L.geoJSON(coleccion as unknown as Parameters<typeof L.geoJSON>[0], {
@@ -347,13 +361,13 @@ export function createMap(container: HTMLElement): MapaInundacion {
             capaActual = nuevaCapa;
             if (anterior) map.removeLayer(anterior);
             errorCapa.hidden = true;
-            precargarVecinos(index, cache, vista.resuelto.entry);
+            precargarVecinos(index, cache, resuelto.entry);
           })
           .catch(() => {
             if (destroyed || miSolicitud !== solicitudId) return;
             // Keep the previous layer on screen; the readouts already show the
             // requested level, so say explicitly that the drawing is stale.
-            errorCapa.textContent = `No se pudo cargar la capa de ${vista.textos.altura}`;
+            errorCapa.textContent = `No se pudo cargar la capa de ${vista.textos.altura ?? ""}`;
             errorCapa.hidden = false;
           });
       });
@@ -375,8 +389,8 @@ export function createMap(container: HTMLElement): MapaInundacion {
 
   const instancia: MapaInundacion = {
     map,
-    setNivelActual(h) {
-      api.setNivelActual(h);
+    setNivelActual(medicion) {
+      api.setNivelActual(medicion);
     },
     setNivelPronosticado(h) {
       api.setNivelPronosticado(h);
@@ -404,8 +418,8 @@ export function createMap(container: HTMLElement): MapaInundacion {
 }
 
 /** Module-level setters used by spec 005's `mountMapa` (it only sees the module). */
-export function setNivelActual(h: number): void {
-  ultimaInstancia?.setNivelActual(h);
+export function setNivelActual(medicion: MedicionActual): void {
+  ultimaInstancia?.setNivelActual(medicion);
 }
 
 export function setNivelPronosticado(h: number): void {

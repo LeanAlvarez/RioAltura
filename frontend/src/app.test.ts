@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Anclaje, UltimaAltura } from "./api/types";
-import { loadDashboardData, nivelActualEstimado, nivelMaximoEstimado } from "./app";
+import { loadDashboardData, medicionActual, nivelMaximoEstimado } from "./app";
 
 const ULTIMA_ALTURA: UltimaAltura = {
   fecha_hora: "2026-09-21T14:20:00Z",
@@ -124,13 +124,32 @@ describe("nivelMaximoEstimado", () => {
   });
 });
 
-describe("nivelActualEstimado", () => {
+describe("medicionActual", () => {
   it("es null cuando la altura de hoy no está disponible", () => {
-    expect(nivelActualEstimado({ kind: "error" })).toBeNull();
-    expect(nivelActualEstimado({ kind: "not-found" })).toBeNull();
+    expect(medicionActual({ kind: "error" })).toBeNull();
+    expect(medicionActual({ kind: "not-found" })).toBeNull();
   });
 
-  it("toma la altura real medida cuando hay dato", () => {
-    expect(nivelActualEstimado({ kind: "ok", data: ULTIMA_ALTURA })).toBe(3.67);
+  it("devuelve la altura medida con su fecha, marcada como reciente", () => {
+    // Dos horas después de la medición: dentro de HORAS_DATO_VIEJO.
+    const ahora = new Date("2026-09-21T16:20:00Z");
+    expect(medicionActual({ kind: "ok", data: ULTIMA_ALTURA }, ahora)).toEqual({
+      alturaM: 3.67,
+      fechaHora: expect.any(String) as unknown as string,
+      reciente: true,
+    });
+  });
+
+  it("marca como no reciente una medición vieja, pero la devuelve igual", () => {
+    // El mapa abre igual en la medición vieja: nunca cae al pronóstico.
+    const ahora = new Date("2026-09-22T14:20:00Z");
+    const medicion = medicionActual({ kind: "ok", data: ULTIMA_ALTURA }, ahora);
+    expect(medicion?.alturaM).toBe(3.67);
+    expect(medicion?.reciente).toBe(false);
+  });
+
+  it("es null si la fecha de la medición no se puede interpretar", () => {
+    const rota = { ...ULTIMA_ALTURA, fecha_hora: "no es una fecha" };
+    expect(medicionActual({ kind: "ok", data: rota })).toBeNull();
   });
 });

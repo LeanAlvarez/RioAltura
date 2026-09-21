@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { MedicionActual } from "../capas";
 import { mountMapa, type MapModule } from "./mapa";
 
 function fakeContainer(): HTMLElement {
@@ -57,16 +58,18 @@ describe("mountMapa", () => {
     await expect(mountMapa(container, 5.5, null, () => Promise.resolve(mod))).resolves.toBeUndefined();
   });
 
-  it("monta el mapa y llama setNivelActual con la altura real de hoy cuando existe (ítem 3)", async () => {
+  const medicion: MedicionActual = { alturaM: 4.29, fechaHora: "21/9/26, 00:00", reciente: true };
+
+  it("monta el mapa y le pasa la medición real de hoy cuando existe", async () => {
     const container = fakeContainer();
     const createMap = vi.fn();
     const setNivelActual = vi.fn();
     const mod: MapModule = { createMap, setNivelActual };
-    await mountMapa(container, null, 4.29, () => Promise.resolve(mod));
-    expect(setNivelActual).toHaveBeenCalledWith(4.29);
+    await mountMapa(container, null, medicion, () => Promise.resolve(mod));
+    expect(setNivelActual).toHaveBeenCalledWith(medicion);
   });
 
-  it("no llama setNivelActual cuando no hay altura real de hoy (null)", async () => {
+  it("no llama setNivelActual cuando no hay medición real (null)", async () => {
     const container = fakeContainer();
     const setNivelActual = vi.fn();
     const mod: MapModule = { createMap: vi.fn(), setNivelActual };
@@ -82,6 +85,6 @@ describe("mountMapa", () => {
         throw new Error("boom");
       },
     };
-    await expect(mountMapa(container, null, 4.29, () => Promise.resolve(mod))).resolves.toBeUndefined();
+    await expect(mountMapa(container, null, medicion, () => Promise.resolve(mod))).resolves.toBeUndefined();
   });
 });

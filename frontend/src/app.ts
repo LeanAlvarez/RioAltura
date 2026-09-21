@@ -2,6 +2,9 @@ import { getUltimaAltura } from "./api/alturas";
 import type { FetchResult } from "./api/client";
 import { getPronostico } from "./api/pronostico";
 import type { Pronostico, UltimaAltura } from "./api/types";
+import type { MedicionActual } from "./capas";
+import { HORAS_DATO_VIEJO } from "./domain/dominio";
+import { formatMomentoMedicion, horasDesde } from "./format";
 
 export interface DashboardData {
   altura: FetchResult<UltimaAltura>;
@@ -35,10 +38,21 @@ export function nivelMaximoEstimado(pronostico: FetchResult<Pronostico>): number
 }
 
 /**
- * La altura real medida hoy, para que el mapa (spec 007, correcciones de
- * diseño, ítem 3) pueda mostrar "hoy está en X m" junto al escenario
- * seleccionado, siempre visible, sin abrir el panel de controles.
+ * La medición real del puerto, que es donde abre el mapa (spec 007, decisión
+ * del usuario tras la revisión de diseño). Viaja con su fecha y con si es
+ * reciente, porque una medición vieja se sigue usando pero rotulada: el mapa
+ * nunca cae al pronóstico, que se leería como la situación de hoy.
  */
-export function nivelActualEstimado(altura: FetchResult<UltimaAltura>): number | null {
-  return altura.kind === "ok" ? altura.data.altura_m : null;
+export function medicionActual(
+  altura: FetchResult<UltimaAltura>,
+  ahora: Date = new Date(),
+): MedicionActual | null {
+  if (altura.kind !== "ok") return null;
+  const medidoEn = new Date(altura.data.fecha_hora);
+  if (Number.isNaN(medidoEn.getTime())) return null;
+  return {
+    alturaM: altura.data.altura_m,
+    fechaHora: formatMomentoMedicion(medidoEn, ahora),
+    reciente: horasDesde(medidoEn, ahora) <= HORAS_DATO_VIEJO,
+  };
 }

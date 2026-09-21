@@ -33,6 +33,17 @@ INA_VAR_ID_ALTURA = 2
 # Prefectura port id for Colón (backup source).
 PREFECTURA_PUERTO_COLON = 710
 
+# --- Reference flood levels shown as map scenarios (m over the gauge zero) ---
+# These are presentation anchors: heights people in Colón remember, so a number
+# on the slider means something. They never feed any calculation.
+
+# January 2019 flood. SOURCE IS PRESS, NOT AN OFFICIAL RECORD: Diario Uno
+# (diariouno.com.ar), nota de enero de 2019 sobre la crecida del río Uruguay,
+# "en Colón el río alcanzó 8,87 metros, casi un metro por encima de su nivel de
+# evacuación (7,9)". Not verifiable against the INA series we load, which
+# starts in 2023. Treat as indicative until an official record confirms it.
+CRECIDA_ENERO_2019_M = 8.87
+
 # --- Early-warning thresholds on the 3-day forecast discharge (m³/s) ---
 # Calibrated with only 2 events: PROVISIONAL.
 

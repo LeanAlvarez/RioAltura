@@ -87,7 +87,7 @@ describe("deriveEstadoHoyView", () => {
     );
 
     if (evacuacionEnSeco.kind === "ready") {
-      expect(evacuacionEnSeco.estadoLabel).toBe("Evacuación en seco");
+      expect(evacuacionEnSeco.estadoLabel).toBe("Evacuación preventiva");
       expect(evacuacionEnSeco.estadoTono).toBe("warn");
       expect(evacuacionEnSeco.distanciaUmbral).toContain("Faltan");
       expect(evacuacionEnSeco.distanciaUmbral).toContain("la alerta");
