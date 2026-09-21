@@ -67,6 +67,10 @@ export interface MapaInundacion {
   map: L.Map;
   setNivelActual(h: number): void;
   setNivelPronosticado(h: number): void;
+  /** Selecciona una altura por código (spec 007 T7: sincronización con la curva de hectáreas). */
+  seleccionar(h: number): void;
+  /** Se dispara con cada cambio de selección (slider, escenario o `seleccionar`), spec 007 T7. */
+  onSeleccionCambia(listener: (h: number) => void): () => void;
   destroy(): void;
 }
 
@@ -89,7 +93,16 @@ interface Panel {
 }
 
 function crearPanel(container: HTMLElement, index: CapaIndex, estado: EstadoMapa): Panel {
-  const panel = L.DomUtil.create("div", "capas-panel", container);
+  // Spec 007 M2: el panel es un `<details>` plegable *fuera* del lienzo del
+  // mapa (ver `createMap`, que ya no lo pasa como hijo del contenedor de
+  // Leaflet), así nunca tapa la ciudad. Abierto por defecto en escritorio
+  // (donde hay lugar de sobra); plegado en mobile para priorizar el mapa
+  // (M1); el usuario puede alternarlo en cualquier ancho.
+  const detalles = L.DomUtil.create("details", "capas-panel", container);
+  detalles.open = window.matchMedia("(min-width: 900px)").matches;
+  const resumen = L.DomUtil.create("summary", "capas-panel-resumen", detalles);
+  resumen.textContent = "Altura y zonas inundables";
+  const panel = L.DomUtil.create("div", "capas-panel-contenido", detalles);
   L.DomEvent.disableClickPropagation(panel);
   L.DomEvent.disableScrollPropagation(panel);
 
@@ -98,6 +111,9 @@ function crearPanel(container: HTMLElement, index: CapaIndex, estado: EstadoMapa
   const cotaEl = L.DomUtil.create("span", "capas-cota", lectura);
   const hectareasEl = L.DomUtil.create("span", "capas-hectareas", lectura);
   const mostrandoEl = L.DomUtil.create("span", "capas-mostrando", lectura);
+
+  // Spec 007 M3: texto explícito de a qué altura corresponde lo que se ve.
+  const zonasEl = L.DomUtil.create("p", "capas-zonas", panel);
 
   const slider = L.DomUtil.create("input", "capas-slider", panel);
   slider.type = "range";
@@ -140,9 +156,11 @@ function crearPanel(container: HTMLElement, index: CapaIndex, estado: EstadoMapa
   const generadoEl = L.DomUtil.create("p", "capas-generado", panel);
   generadoEl.textContent = formatGenerado(index.generado);
 
-  const fueraDeRangoEl = L.DomUtil.create("div", "capas-fuera-rango", container);
+  // En flujo normal dentro del panel (no superpuesto sobre el mapa, spec 007 M2).
+  const fueraDeRangoEl = L.DomUtil.create("div", "capas-fuera-rango", panel);
   fueraDeRangoEl.setAttribute("role", "alert");
   fueraDeRangoEl.hidden = true;
+  panel.insertBefore(fueraDeRangoEl, lectura);
 
   return {
     render(vista) {
@@ -150,6 +168,7 @@ function crearPanel(container: HTMLElement, index: CapaIndex, estado: EstadoMapa
       cotaEl.textContent = vista.textos.cota;
       hectareasEl.textContent = vista.textos.hectareas;
       mostrandoEl.textContent = vista.textos.mostrando ?? "";
+      zonasEl.textContent = `Si el río llega a ${vista.textos.altura}, estas zonas podrían inundarse.`;
       slider.value = String(vista.seleccion);
       slider.setAttribute("aria-valuetext", vista.textos.altura);
 
@@ -182,7 +201,15 @@ function precargarVecinos(index: CapaIndex, cache: CapaCache, entry: CapaEntry):
 }
 
 export function createMap(container: HTMLElement): MapaInundacion {
-  const map = L.map(container, { zoomControl: true }).setView(COLON_CENTER, COLON_ZOOM);
+  // Spec 007 M2: el panel de controles vive en un contenedor propio, fuera
+  // del lienzo que Leaflet gestiona, para que nunca quede superpuesto sobre
+  // la ciudad (antes L.map(container) convertía toda la tarjeta en el mapa,
+  // y el panel se dibujaba encima como overlay).
+  container.classList.add("mapa-inundacion-root");
+  const lienzo = L.DomUtil.create("div", "mapa-inundacion-lienzo", container);
+  const panelWrap = L.DomUtil.create("div", "mapa-inundacion-panel-wrap", container);
+
+  const map = L.map(lienzo, { zoomControl: true }).setView(COLON_CENTER, COLON_ZOOM);
   const layers = createBaseLayers();
 
   layers["Satélite"]?.addTo(map);
@@ -210,15 +237,24 @@ export function createMap(container: HTMLElement): MapaInundacion {
   let destroyed = false;
   let pendienteActual: number | null = null;
   let pendientePronosticado: number | null = null;
+  let pendienteSeleccion: number | null = null;
+  const nivelListeners = new Set<(h: number) => void>();
 
   // Until (or unless) index.json loads, the public API is a no-op that just
   // remembers the last requested values — spec 005 can call it unconditionally.
-  let api: { setNivelActual(h: number): void; setNivelPronosticado(h: number): void } = {
+  let api: {
+    setNivelActual(h: number): void;
+    setNivelPronosticado(h: number): void;
+    seleccionar(h: number): void;
+  } = {
     setNivelActual(h) {
       pendienteActual = h;
     },
     setNivelPronosticado(h) {
       pendientePronosticado = h;
+    },
+    seleccionar(h) {
+      pendienteSeleccion = h;
     },
   };
 
@@ -228,16 +264,17 @@ export function createMap(container: HTMLElement): MapaInundacion {
 
       const estado = createEstadoMapa(index);
       const cache = createCapaCache();
-      const panel = crearPanel(container, index, estado);
+      const panel = crearPanel(panelWrap, index, estado);
 
       let capaActual: L.GeoJSON | null = null;
       let solicitudId = 0;
-      const errorCapa = L.DomUtil.create("div", "capas-error", container);
+      const errorCapa = L.DomUtil.create("div", "capas-error", lienzo);
       errorCapa.setAttribute("role", "status");
       errorCapa.hidden = true;
 
       estado.subscribe((vista) => {
         panel.render(vista);
+        for (const listener of nivelListeners) listener(vista.seleccion);
         const miSolicitud = ++solicitudId;
         cache
           .get(vista.resuelto.entry)
@@ -266,13 +303,15 @@ export function createMap(container: HTMLElement): MapaInundacion {
       api = {
         setNivelActual: estado.setNivelActual,
         setNivelPronosticado: estado.setNivelPronosticado,
+        seleccionar: (h) => estado.seleccionar(h, { porUsuario: true }),
       };
       if (pendienteActual !== null) estado.setNivelActual(pendienteActual);
       if (pendientePronosticado !== null) estado.setNivelPronosticado(pendientePronosticado);
+      if (pendienteSeleccion !== null) estado.seleccionar(pendienteSeleccion, { porUsuario: true });
     })
     .catch(() => {
       if (destroyed) return;
-      const div = L.DomUtil.create("div", "capas-error", container);
+      const div = L.DomUtil.create("div", "capas-error", lienzo);
       div.textContent = "Capas de inundación no disponibles";
     });
 
@@ -283,6 +322,13 @@ export function createMap(container: HTMLElement): MapaInundacion {
     },
     setNivelPronosticado(h) {
       api.setNivelPronosticado(h);
+    },
+    seleccionar(h) {
+      api.seleccionar(h);
+    },
+    onSeleccionCambia(listener) {
+      nivelListeners.add(listener);
+      return () => nivelListeners.delete(listener);
     },
     destroy() {
       destroyed = true;
@@ -304,4 +350,13 @@ export function setNivelActual(h: number): void {
 
 export function setNivelPronosticado(h: number): void {
   ultimaInstancia?.setNivelPronosticado(h);
+}
+
+/** Module-level API used by spec 007's `mountSuperficieAfectada` (it only sees the module). */
+export function seleccionar(h: number): void {
+  ultimaInstancia?.seleccionar(h);
+}
+
+export function onSeleccionCambia(listener: (h: number) => void): () => void {
+  return ultimaInstancia?.onSeleccionCambia(listener) ?? (() => {});
 }

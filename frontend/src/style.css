@@ -106,6 +106,23 @@ body {
   margin: 0 auto;
 }
 
+/* Spec 007: desde 900 px, grilla de dos columnas con el mapa ocupando el
+   ancho completo (spans both columns) en vez de una franja angosta. */
+@media (min-width: 900px) {
+  .dashboard {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+    max-width: 1200px;
+    gap: 1rem;
+    padding: 1.5rem;
+  }
+
+  .dashboard > .card--mapa {
+    grid-column: 1 / -1;
+  }
+}
+
 .card {
   background: var(--card-bg);
   border: 1px solid var(--border);
@@ -127,6 +144,19 @@ body {
 }
 
 .card-info {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.card-subtitulo {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.anclaje-nota {
+  margin: 0 0 0.75rem;
+  font-size: 0.8rem;
   color: var(--muted);
   font-style: italic;
 }
@@ -274,9 +304,79 @@ body {
   color: var(--muted);
 }
 
+.grafico-canvas-wrap {
+  position: relative;
+}
+
 .grafico-canvas {
   width: 100%;
   overflow-x: auto;
+}
+
+/*
+ * `left` y `right` fijos (no solo `right` + ancho intrínseco) para que la
+ * caja nunca pueda desbordar el gráfico, pase lo que pase con el cálculo de
+ * `top`: el texto se alinea a la derecha y se trunca con "…" en vez de
+ * salirse del recorte visible en pantallas angostas.
+ */
+.grafico-umbral-etiqueta {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  transform: translateY(-50%);
+  padding: 1px 5px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: color-mix(in srgb, var(--card-bg) 85%, transparent);
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.grafico-tooltip {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  max-width: 12rem;
+}
+
+/* Leyenda propia (spec 007 T2): reemplaza la de uPlot, que solo mostraba "--". */
+.grafico-leyenda {
+  list-style: none;
+  margin: 0.6rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  font-size: 0.78rem;
+  color: var(--fg);
+}
+
+.grafico-leyenda li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.grafico-leyenda-linea {
+  display: inline-block;
+  width: 1.1rem;
+  height: 0;
+  border-top: 2.5px solid var(--color-linea);
+}
+
+.grafico-leyenda-linea--punteada {
+  border-top-style: dashed;
 }
 
 .grafico-estado {
@@ -294,13 +394,193 @@ body {
   margin: 0.35rem 0 0;
 }
 
+/* --- Historial (T3) --- */
+
+.historial-eventos {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+}
+
+.historial-eventos li {
+  border-top: 1px solid var(--border);
+  padding-top: 0.3rem;
+}
+
+.historial-evento-fecha {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+/* --- ¿Cuánto acierta el pronóstico? (T4) --- */
+
+.precision-frase {
+  margin: 0 0 0.6rem;
+}
+
+/* --- Aguas arriba (T5) --- */
+
+/* Reusa .frase-pronostico y .tendencia de la tarjeta "Próximos días". */
+
+/* --- Contexto (T6) --- */
+
+.contexto-filas {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.contexto-fila {
+  display: grid;
+  grid-template-columns: 3.2rem 1fr 4rem;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.contexto-fila--hoy {
+  font-weight: 700;
+}
+
+.contexto-anio {
+  color: var(--muted);
+}
+
+.contexto-fila--hoy .contexto-anio {
+  color: var(--fg);
+}
+
+.contexto-barra-pista {
+  display: block;
+  height: 0.6rem;
+  border-radius: 999px;
+  background: var(--skeleton);
+  overflow: hidden;
+}
+
+.contexto-barra {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.contexto-altura {
+  text-align: right;
+}
+
+/* --- Superficie afectada (T7) --- */
+
+.superficie-svg {
+  width: 100%;
+  height: auto;
+  margin: 0.5rem 0;
+}
+
+.superficie-curva-linea {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.superficie-curva-punto {
+  fill: var(--accent);
+  stroke: var(--card-bg);
+  stroke-width: 2;
+}
+
+.superficie-slider {
+  width: 100%;
+  height: 40px;
+  touch-action: pan-y;
+}
+
+.superficie-texto {
+  margin: 0.5rem 0 0;
+}
+
+.superficie-estado {
+  color: var(--muted);
+}
+
+/* --- Detalle técnico (T8) --- */
+
+.card--detalle {
+  font-size: 0.9rem;
+}
+
+.detalle-tecnico summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 1rem;
+}
+
+.detalle-tecnico-contenido {
+  margin-top: 0.75rem;
+}
+
+.detalle-tecnico-contenido h3 {
+  font-size: 0.85rem;
+  margin: 1rem 0 0.25rem;
+  color: var(--muted);
+}
+
+.detalle-tabla {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin: 0.35rem 0;
+}
+
+.detalle-tabla th,
+.detalle-tabla td {
+  text-align: left;
+  padding: 0.25rem 0.4rem;
+  border-bottom: 1px solid var(--border);
+}
+
 /* --- Mapa --- */
 
 .card--mapa {
-  min-height: 60dvh;
   padding: 0;
   overflow: hidden;
+}
+
+/*
+ * Spec 007 M1/M2: el lienzo de Leaflet y el panel de controles son hermanos
+ * en flujo normal (no el panel superpuesto sobre el mapa), así el panel
+ * nunca tapa la ciudad. El lienzo solo, no la tarjeta completa, es lo que
+ * cumple el mínimo de alto (M1).
+ */
+.mapa-inundacion-root {
+  display: flex;
+  flex-direction: column;
+}
+
+.mapa-inundacion-lienzo {
+  min-height: 60dvh;
   position: relative;
+}
+
+@media (min-width: 900px) {
+  .mapa-inundacion-lienzo {
+    min-height: 75dvh;
+  }
+}
+
+.mapa-inundacion-panel-wrap {
+  border-top: 1px solid var(--border);
 }
 
 .map-placeholder {
@@ -371,14 +651,12 @@ body {
 /* --- Mapa de inundación --- */
 
 /*
- * The map overlays (panel, notices, errors) keep a light surface in both
- * themes, like Leaflet's own controls, because they sit on satellite tiles.
- * They must therefore pin the light text tokens: inheriting the themed ones
- * paints near-white text on a near-white panel under `prefers-color-scheme:
- * dark`. Redefining the custom properties here also fixes every descendant
- * that reads them.
+ * The transient overlays (out-of-range notice, layer-load error) that still
+ * sit on top of the satellite tiles keep a light surface in both themes,
+ * like Leaflet's own controls. They must therefore pin the light text
+ * tokens: inheriting the themed ones paints near-white text on a near-white
+ * chip under `prefers-color-scheme: dark`.
  */
-.capas-panel,
 .capas-aviso-modelo,
 .capas-fuera-rango,
 .capas-error,
@@ -400,13 +678,8 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
+/* En flujo normal dentro del panel, no superpuesto sobre el mapa (spec 007 M2). */
 .capas-fuera-rango {
-  position: absolute;
-  top: 0.5rem;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1000;
-  max-width: min(92%, 32rem);
   padding: 0.5rem 0.75rem;
   background: #fff4e5;
   color: var(--aviso);
@@ -415,7 +688,10 @@ body {
   font-size: 0.85rem;
   font-weight: 600;
   text-align: center;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.capas-fuera-rango[hidden] {
+  display: none;
 }
 
 .capas-error {
@@ -432,17 +708,26 @@ body {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
+/*
+ * Spec 007 M2: el panel es un `<details>` en flujo normal, DEBAJO del mapa
+ * (nunca superpuesto): nunca tapa la ciudad, ni en mobile ni en escritorio.
+ * Plegable para quien solo quiera ver el mapa.
+ */
 .capas-panel {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 1000;
-  max-height: 40dvh;
-  overflow-y: auto;
-  padding: 0.6rem 0.75rem calc(0.6rem + env(safe-area-inset-bottom));
-  background: rgba(255, 255, 255, 0.96);
-  border-top: 1px solid #e1e5ea;
+  display: block;
+}
+
+.capas-panel-resumen {
+  cursor: pointer;
+  padding: 0.6rem 0.75rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--fg);
+  background: var(--card-bg);
+}
+
+.capas-panel-contenido {
+  padding: 0 0.75rem calc(0.75rem + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -471,30 +756,39 @@ body {
   font-style: italic;
 }
 
+.capas-zonas {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
 .capas-slider {
   width: 100%;
   height: 40px;
   touch-action: pan-y;
 }
 
+/*
+ * Spec 007 M2: los chips envuelven en vez de desbordar con scroll horizontal
+ * (antes se veían cortados, p. ej. "4,44 costanera jul 202", sin ninguna
+ * pista visual de que había más texto).
+ */
 .capas-escenarios {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
-  overflow-x: auto;
-  padding-bottom: 0.2rem;
-  -webkit-overflow-scrolling: touch;
 }
 
 .capas-escenario {
   flex: 0 0 auto;
   min-height: 40px;
   padding: 0.4rem 0.65rem;
-  border: 1px solid #cfd6de;
+  border: 1px solid var(--border);
   border-radius: 999px;
-  background: #fff;
+  background: var(--card-bg);
   color: var(--fg);
   font-size: 0.8rem;
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
 }
 
 .capas-escenario[aria-pressed="true"] {
@@ -544,40 +838,4 @@ body {
   margin: 0;
   font-size: 0.7rem;
   color: var(--muted);
-}
-
-@media (max-width: 767px) {
-  /*
-   * Below 768px the panel is a bottom sheet, and Leaflet anchors its
-   * attribution to the same bottom edge — so the two texts overlap and both
-   * become unreadable. Lift the attribution above the sheet and reserve room
-   * for it, instead of hiding a credit we are required to show.
-   */
-  /*
-   * Leaflet gives `.leaflet-bottom` its own stacking context, so raising the
-   * attribution itself does nothing against the panel — the positioned
-   * ancestor is what competes with it.
-   */
-  .leaflet-container .leaflet-control-container .leaflet-bottom {
-    z-index: 1001;
-  }
-
-  .capas-panel {
-    padding-bottom: calc(2.6rem + env(safe-area-inset-bottom));
-  }
-}
-
-@media (min-width: 768px) {
-  .capas-panel {
-    left: auto;
-    right: 0.75rem;
-    /* Leave the collapsed layers control (top-right) visible above the card. */
-    top: 3.5rem;
-    bottom: 0.75rem;
-    width: 20rem;
-    max-height: none;
-    border-radius: 10px;
-    border: 1px solid #e1e5ea;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-  }
 }
