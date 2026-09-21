@@ -1,0 +1,74 @@
+# Un compose por worktree. Corré primero scripts/wt-env.sh: genera .env.local con
+# puertos únicos y deja .env -> .env.local, que es de donde compose interpola ${VAR}.
+# El nombre del proyecto (COMPOSE_PROJECT_NAME) aísla contenedores, red y volumen.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rioaltura}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rioaltura}
+      POSTGRES_DB: ${POSTGRES_DB:-rioaltura}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      POSTGRES_USER: ${POSTGRES_USER:-rioaltura}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rioaltura}
+      POSTGRES_DB: ${POSTGRES_DB:-rioaltura}
+      DB_HOST: db
+      DB_PORT: "5432"
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      POSTGRES_USER: ${POSTGRES_USER:-rioaltura}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rioaltura}
+      POSTGRES_DB: ${POSTGRES_DB:-rioaltura}
+      DB_HOST: db
+      DB_PORT: "5432"
+      # Solo el worker recibe la API key de Google. Nunca la API ni la web.
+      FLOODS_API_KEY: ${FLOODS_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    stop_grace_period: 15s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: frontend
+      args:
+        VITE_API_URL: ${VITE_API_URL:-}
+    environment:
+      API_UPSTREAM: api:8000
+    ports:
+      - "${WEB_PORT:-5173}:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  # Se prefija con COMPOSE_PROJECT_NAME: cada worktree tiene su propia base.
+  pgdata:
