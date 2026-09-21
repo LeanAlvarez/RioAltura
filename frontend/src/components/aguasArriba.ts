@@ -147,6 +147,11 @@ function dibujarMiniChart(
     {
       width,
       height: 150,
+      // Reserva lugar para que el último rótulo del eje X no quede cortado
+      // contra el borde del lienzo (menor, revisión de diseño; mismo ajuste
+      // que `grafico.ts`), con menos margen que el resto por ser un
+      // mini-gráfico angosto.
+      padding: [8, 20, 0, 0],
       scales: { x: { time: true } },
       series: [
         {},

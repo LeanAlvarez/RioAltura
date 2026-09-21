@@ -179,8 +179,8 @@ export function mountHistorial(container: HTMLElement, deps: HistorialDeps = def
     <p class="card-subtitulo">Todos los datos de altura real cargados hasta hoy, con las crecidas de referencia marcadas.</p>
     <div class="grafico-canvas" id="historial-canvas"></div>
     <ul class="grafico-leyenda" aria-hidden="true">
-      <li><span class="historial-leyenda-muestra historial-leyenda-muestra--banda"></span> Franja: días en alerta o evacuación</li>
-      <li><span class="historial-leyenda-muestra historial-leyenda-muestra--punto"></span> Punto: crecida de referencia</li>
+      <li><span class="historial-leyenda-muestra historial-leyenda-muestra--banda"></span> Las franjas marcan los días en que hubo alerta</li>
+      <li><span class="historial-leyenda-muestra historial-leyenda-muestra--punto"></span> Los puntos son las crecidas grandes</li>
     </ul>
     <p class="grafico-estado" role="status" aria-live="polite"></p>
     <ul class="historial-eventos" id="historial-eventos"></ul>
@@ -211,6 +211,10 @@ export function mountHistorial(container: HTMLElement, deps: HistorialDeps = def
       {
         width,
         height: 240,
+        // Reserva lugar para que el último rótulo del eje X no quede
+        // cortado contra el borde del lienzo (menor, revisión de diseño;
+        // mismo ajuste que `grafico.ts`).
+        padding: [12, 28, 0, 0],
         scales: { x: { time: true } },
         series: [{}, { label: "Altura real", stroke: colorReal, width: TRAZOS.alturaReal.widthPx, points: { show: false } }],
         // L4/M4 (spec 008) + paleta v3: ejes >= 13 px, rol dedicado

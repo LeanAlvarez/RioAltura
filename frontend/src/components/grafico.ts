@@ -154,7 +154,11 @@ function crearEtiquetasUmbrales(
     const el = document.createElement("div");
     el.className = "grafico-umbral-etiqueta";
     el.style.color = t.color;
-    el.textContent = `${t.label} (${metrosEjeFormatter.format(t.valor)} m)`;
+    // El número va primero (menor, revisión de diseño a 360 px): con el
+    // nombre adelante, el `text-overflow: ellipsis` de `.grafico-umbral-etiqueta`
+    // cortaba justo el número al final ("Evacuación preventiva (6,…"), que es
+    // el dato. Así, si algo se corta, se corta el nombre, nunca la altura.
+    el.textContent = `${metrosEjeFormatter.format(t.valor)} m — ${t.label}`;
     wrapEl.appendChild(el);
     return { el, valor: t.valor };
   });
@@ -236,7 +240,11 @@ function construirOpciones(
   return {
     width,
     height: 280,
-    padding: [12, 12, 0, 0],
+    // Right padding = 28 (no 12): a 1920 px, el último rótulo del eje X
+    // (p.ej. "26 sep") quedaba cortado por el borde del lienzo (menor,
+    // revisión de diseño) porque uPlot centra la etiqueta sobre su marca y
+    // no reservaba lugar para la mitad que sobresale del último tick.
+    padding: [12, 28, 0, 0],
     scales: { x: { time: true } },
     series: uPlotSeries,
     bands: [{ series: [2, 3] }],

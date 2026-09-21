@@ -137,6 +137,10 @@ export function mountPrecision(container: HTMLElement, deps: PrecisionDeps = def
       {
         width,
         height: 220,
+        // Reserva lugar para que el último rótulo del eje X no quede
+        // cortado contra el borde del lienzo (menor, revisión de diseño;
+        // mismo ajuste que `grafico.ts`).
+        padding: [12, 28, 0, 0],
         scales: { x: { time: true } },
         series: [
           {},
