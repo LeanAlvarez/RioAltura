@@ -89,7 +89,7 @@ export function renderEstadoHoy(container: HTMLElement, view: EstadoHoyView): vo
         <p class="altura-actual">${view.altura}</p>
         <p class="badge" data-tono="${view.estadoTono}">${view.estadoLabel}</p>
         <p class="umbral-distancia">${view.distanciaUmbral}</p>
-        <p class="tendencia">${view.tendencia} en las últimas 24 h</p>
+        <p class="tendencia">${view.tendencia === "Estable" ? "No subió ni bajó en el último día" : `${view.tendencia} en las últimas 24 h`}</p>
         <p class="medicion">${view.medicion}</p>
       </div>
       ${buildReglaHidrometricaHtml(deriveReglaHidrometricaView(view.alturaM))}

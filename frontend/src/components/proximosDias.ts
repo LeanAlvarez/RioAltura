@@ -152,12 +152,15 @@ export function renderProximosDias(container: HTMLElement, view: ProximosDiasVie
   const avisoTexto =
     view.nivelAviso === "sin_aviso" ? "Hoy no hay alerta." : `Nivel de aviso: <strong>${view.avisoLabel}</strong>.`;
 
+  // Menor (revisión de diseño): "Hoy no hay alerta." como primer renglón de
+  // una tarjeta que habla del futuro confundía; la frase sobre lo que viene
+  // ahora va primero, el aviso vigente después.
   container.innerHTML = `
     <h2>${TITULO}</h2>
-    <p class="aviso-nivel">${avisoTexto}</p>
     <p class="frase-pronostico">
       ${view.frase}${view.fraseExtrapolada ? ' <span class="caveat">Este día el pronóstico es menos confiable: el río podría estar más alto de lo que podemos calcular con precisión.</span>' : ""}
     </p>
+    <p class="aviso-nivel">${avisoTexto}</p>
     ${view.anclajeTexto ? `<p class="anclaje-nota">${view.anclajeTexto}</p>` : ""}
     <ul class="dias-mini">${itemsMini}</ul>
     ${view.hayExtrapolados ? '<p class="caveat-nota">* Estimación menos confiable: el río podría estar más alto de lo que podemos calcular con precisión.</p>' : ""}
