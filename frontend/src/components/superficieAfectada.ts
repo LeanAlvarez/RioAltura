@@ -59,11 +59,12 @@ const defaultDeps: SuperficieAfectadaDeps = {
 
 const ANCHO_SVG = 320;
 const ALTO_SVG = 120;
-// Márgenes para los rótulos de eje (ítem 9, correcciones de diseño): la
-// curva original no tenía ningún eje, así que ninguna de las dos escalas
-// (metros / hectáreas) era legible sin adivinar.
-const MARGEN_IZQUIERDO = 46;
-const MARGEN_INFERIOR = 16;
+// Márgenes para los rótulos de eje (ítem 9, correcciones de diseño; L4 spec
+// 008: >= 13 px de fuente, así que el margen crece un poco para que no se
+// corten). La curva original no tenía ningún eje, así que ninguna de las dos
+// escalas (metros / hectáreas) era legible sin adivinar.
+const MARGEN_IZQUIERDO = 58;
+const MARGEN_INFERIOR = 22;
 
 /**
  * "Superficie afectada" (spec 007 T7): curva de hectáreas inundadas por

@@ -246,12 +246,22 @@ function construirOpciones(
     scales: { x: { time: true } },
     series: uPlotSeries,
     bands: [{ series: [2, 3] }],
+    // L4 (spec 008): ejes >= 13 px y con --fg (no el gris por defecto de
+    // uPlot) para contraste AA en los dos temas. M4: a 360 px, menos marcas
+    // en el eje X (más espacio mínimo entre ticks) para que no se amontonen.
     axes: [
       {
+        font: "13px system-ui, sans-serif",
+        stroke: colores.real,
+        size: 40,
+        space: width < 400 ? 70 : 50,
         values: (_u, splits) => splits.map((s) => fechaEjeFormatter.format(new Date(s * 1000))),
       },
       {
         label: "Altura (metros)",
+        font: "13px system-ui, sans-serif",
+        labelFont: "13px system-ui, sans-serif",
+        stroke: colores.real,
         values: (_u, splits) => splits.map((s) => metrosEjeFormatter.format(s)),
       },
     ],

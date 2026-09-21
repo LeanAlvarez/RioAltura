@@ -15,17 +15,23 @@ import { mountContexto } from "./components/contexto";
 import { mountHistorial } from "./components/historial";
 import { mountPrecision } from "./components/precision";
 import { mountDetalleTecnico } from "./components/detalleTecnico";
+import { mountFaq } from "./components/faq";
 import { renderPie } from "./components/pie";
+import { mountThemeToggle } from "./theme";
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app not found");
 
 // Jerarquía de lectura (CLAUDE.md §7, spec 007): estado de hoy y qué hacer
 // arriba, contexto después, detalle técnico al final. El mapa ocupa la
-// columna completa de la grilla (ver style.css).
+// fila completa de la grilla (ver style.css, L2).
 app.innerHTML = `
   <header class="topbar">
     <h1>Río Uruguay en Colón</h1>
+    <nav class="topbar-nav">
+      <a class="topbar-link" href="#faq">Preguntas frecuentes</a>
+      <button type="button" id="theme-toggle" class="theme-toggle" aria-pressed="false"></button>
+    </nav>
     <div id="health" class="health" role="status" aria-live="polite"></div>
   </header>
   <main class="dashboard">
@@ -46,6 +52,7 @@ app.innerHTML = `
     <section id="tarjeta-contexto" class="card" aria-live="polite"></section>
     <section id="tarjeta-historial" class="card card--grafico"></section>
     <section id="tarjeta-precision" class="card"></section>
+    <section id="faq" class="card card--faq"></section>
     <section id="tarjeta-detalle" class="card card--detalle"></section>
   </main>
   <footer class="footer" id="pie"></footer>
@@ -63,8 +70,10 @@ const aguasArribaEl = document.querySelector<HTMLElement>("#tarjeta-aguas-arriba
 const contextoEl = document.querySelector<HTMLElement>("#tarjeta-contexto");
 const historialEl = document.querySelector<HTMLElement>("#tarjeta-historial");
 const precisionEl = document.querySelector<HTMLElement>("#tarjeta-precision");
+const faqEl = document.querySelector<HTMLElement>("#faq");
 const detalleEl = document.querySelector<HTMLElement>("#tarjeta-detalle");
 const pieEl = document.querySelector<HTMLElement>("#pie");
+const themeToggleEl = document.querySelector<HTMLButtonElement>("#theme-toggle");
 if (
   !healthEl ||
   !hoyEl ||
@@ -78,11 +87,17 @@ if (
   !contextoEl ||
   !historialEl ||
   !precisionEl ||
+  !faqEl ||
   !detalleEl ||
-  !pieEl
+  !pieEl ||
+  !themeToggleEl
 ) {
   throw new Error("layout elements not found");
 }
+
+// T1/T2 (spec 008): toggle de tema en el header, con try/catch adentro de
+// theme.ts para que ventana privada / cookies bloqueadas no rompan la página.
+mountThemeToggle(themeToggleEl);
 
 renderHealth(healthEl, { kind: "loading" });
 void fetchHealth().then((state) => renderHealth(healthEl, state));
@@ -98,6 +113,7 @@ mountAguasArriba(aguasArribaEl);
 mountContexto(contextoEl);
 mountHistorial(historialEl);
 mountPrecision(precisionEl);
+mountFaq(faqEl);
 mountDetalleTecnico(detalleEl, { getPronostico, getPronosticoAguasArriba });
 
 void loadDashboardData().then(({ altura, pronostico }) => {

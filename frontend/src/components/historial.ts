@@ -225,9 +225,16 @@ export function mountHistorial(container: HTMLElement, deps: HistorialDeps = def
         height: 240,
         scales: { x: { time: true } },
         series: [{}, { label: "Altura real", stroke: colorReal, width: 1.5, points: { show: false } }],
+        // L4/M4 (spec 008): ejes >= 13 px, contraste AA (--fg) y menos marcas
+        // en el eje X a 360 px.
         axes: [
-          { values: (_u, splits) => splits.map((s) => fechaEjeFormatter.format(new Date(s * 1000))) },
-          { label: "Altura (metros)" },
+          {
+            font: "13px system-ui, sans-serif",
+            stroke: colorReal,
+            space: width < 400 ? 70 : 50,
+            values: (_u, splits) => splits.map((s) => fechaEjeFormatter.format(new Date(s * 1000))),
+          },
+          { label: "Altura (metros)", font: "13px system-ui, sans-serif", labelFont: "13px system-ui, sans-serif", stroke: colorReal },
         ],
         legend: { show: false },
         hooks: construirHooks(rangos, puntos, colorAviso, colorReal),
