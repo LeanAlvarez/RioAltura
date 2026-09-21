@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { CapaIndex } from "../capas";
-import { buildCurvaPuntos, describeSuperficie, escalarCurva } from "./superficieAfectada";
+import {
+  buildCurvaPuntos,
+  describeSuperficie,
+  escalarCurva,
+  margenEjeY,
+} from "./superficieAfectada";
 
 function index(overrides: Partial<CapaIndex> = {}): CapaIndex {
   return {
@@ -56,5 +61,26 @@ describe("describeSuperficie", () => {
     expect(texto).toContain("5,00 m");
     expect(texto).toContain("400 ha");
     expect(texto).toMatch(/^Si el río llega a/);
+  });
+});
+
+describe("margenEjeY", () => {
+  it("crece con la etiqueta más larga en vez de quedar fijo", () => {
+    // El bug real: con margen fijo de 58 px, "26.094 ha" se dibujaba cortado
+    // y se leía "6.094 ha" — 20.000 hectáreas de diferencia.
+    const conRangoViejo = margenEjeY(["14.613 ha", "66 ha"]);
+    const conRangoNuevo = margenEjeY(["26.094 ha", "66 ha"]);
+    expect(conRangoNuevo).toBeGreaterThanOrEqual(conRangoViejo);
+    expect(conRangoNuevo).toBeGreaterThan(58);
+  });
+
+  it("deja lugar para la etiqueta entera, no sólo para parte", () => {
+    const etiqueta = "26.094 ha";
+    // 13 px de fuente por 0,62 em de ancho por carácter, más la holgura.
+    expect(margenEjeY([etiqueta])).toBeGreaterThan(etiqueta.length * 13 * 0.6);
+  });
+
+  it("no se achica por debajo de la etiqueta más corta", () => {
+    expect(margenEjeY(["66 ha"])).toBeGreaterThan(0);
   });
 });

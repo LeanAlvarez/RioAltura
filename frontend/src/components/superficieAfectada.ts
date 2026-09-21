@@ -63,7 +63,30 @@ const ALTO_SVG = 120;
 // 008: >= 13 px de fuente, así que el margen crece un poco para que no se
 // corten). La curva original no tenía ningún eje, así que ninguna de las dos
 // escalas (metros / hectáreas) era legible sin adivinar.
-const MARGEN_IZQUIERDO = 58;
+/** Tamaño de fuente de las etiquetas del eje, igual que en `style.css`. */
+const EJE_FONT_PX = 13;
+/**
+ * Ancho aproximado de un carácter de las etiquetas del eje, en múltiplos del
+ * tamaño de fuente. Los dígitos y el separador de miles de la fuente del
+ * sistema entran holgados en 0,62 em.
+ */
+const EJE_ANCHO_CARACTER_EM = 0.62;
+/** Aire entre la etiqueta más larga y la curva. */
+const EJE_HOLGURA_PX = 8;
+
+/**
+ * Margen izquierdo necesario para que la etiqueta más larga del eje Y entre
+ * entera.
+ *
+ * Se calcula, no se fija: el máximo del eje crece con el rango de la
+ * simulación (14.613 ha a 13 m, 26.094 ha a 20 m), y un margen hardcodeado le
+ * recorta el primer dígito cada vez que los datos lo superan — "26.094 ha" se
+ * leía "6.094 ha", errando por 20.000 hectáreas.
+ */
+export function margenEjeY(etiquetas: readonly string[]): number {
+  const caracteres = etiquetas.reduce((max, etiqueta) => Math.max(max, etiqueta.length), 0);
+  return Math.ceil(caracteres * EJE_FONT_PX * EJE_ANCHO_CARACTER_EM) + EJE_HOLGURA_PX;
+}
 const MARGEN_INFERIOR = 22;
 
 /**
@@ -87,6 +110,7 @@ export function mountSuperficieAfectada(container: HTMLElement, deps: Superficie
       const hectareasTodas = puntos.map((p) => p.hectareas);
       const haMin = Math.min(...hectareasTodas);
       const haMax = Math.max(...hectareasTodas);
+      const MARGEN_IZQUIERDO = margenEjeY([formatHectareas(haMax), formatHectareas(haMin)]);
       const anchoTotal = ANCHO_SVG + MARGEN_IZQUIERDO;
       const altoTotal = ALTO_SVG + MARGEN_INFERIOR;
 
