@@ -26,6 +26,21 @@ const MARGEN_ESCALA_M = 0.5;
  */
 const SEPARACION_MIN_ETIQUETA_PCT = 22;
 
+/**
+ * Margen (en % de alto de la regla) que ninguna etiqueta de texto puede
+ * cruzar, ni por arriba ni por abajo (defecto G1 de la revisión de diseño,
+ * medido en navegador a 1920 px: la etiqueta de "Evacuación" podía terminar
+ * flotando por encima de donde empieza la barra, porque la versión anterior
+ * solo evitaba que las etiquetas se pisaran entre sí, sin reservar lugar
+ * para que la más alta (o la más baja) entrara entera dentro del eje). Una
+ * etiqueta de hasta 3 líneas a 0,8125rem/1.15 de interlineado mide como
+ * mucho ~45 px; sobre el `min-height: 12rem` (192 px) de `.regla-marcas` eso
+ * son ~23,4 % de alto total, así que el margen tiene que ser al menos la
+ * mitad de eso (la etiqueta se centra sobre su posición) para que quepa
+ * completa. 15 % deja margen de sobra incluso en ese peor caso.
+ */
+const MARGEN_BORDE_ETIQUETA_PCT = 15;
+
 export interface EscalaRegla {
   minM: number;
   maxM: number;
@@ -58,22 +73,46 @@ interface PosicionBase {
 }
 
 /**
- * Pure: empuja hacia arriba las etiquetas que quedarían a menos de
- * `SEPARACION_MIN_ETIQUETA_PCT` de la anterior, de abajo hacia arriba. La
- * marca (el tick) siempre queda en su posición exacta a escala; esto solo
- * mueve el texto para que se pueda leer.
+ * Pure: separa las etiquetas de texto que quedarían pisadas entre sí, sin
+ * dejar que ninguna se salga de la barra (defecto G1: antes solo se hacía la
+ * primera pasada de abajo hacia arriba, sin reservar margen contra el borde
+ * superior, así que la etiqueta más alta podía terminar flotando fuera de
+ * la regla). Algoritmo estándar de dos pasadas para "declutter" de
+ * etiquetas en un eje:
+ *
+ * 1. De abajo hacia arriba: cada etiqueta se separa al menos
+ *    `SEPARACION_MIN_ETIQUETA_PCT` de la anterior, nunca por debajo de
+ *    `MARGEN_BORDE_ETIQUETA_PCT`.
+ * 2. De arriba hacia abajo: recorta lo anterior para que ninguna quede por
+ *    encima de `100 - MARGEN_BORDE_ETIQUETA_PCT`, empujando hacia abajo en
+ *    cascada si hace falta (siempre respetando la separación mínima).
+ *
+ * La marca (el tick) siempre queda en su posición exacta a escala; esto solo
+ * mueve el texto. Cuando el texto se separa del tick, `buildReglaHidrometricaHtml`
+ * dibuja una línea guía entre los dos para que la asociación no quede
+ * ambigua (ninguna etiqueta puede quedar "flotando" sin que se sepa de qué
+ * marca es).
  */
 function separarEtiquetas(marcas: readonly PosicionBase[]): Map<string, number> {
   const ordenadas = [...marcas].sort((a, b) => a.posicionPct - b.posicionPct);
-  const ajustadas: { id: string; pos: number }[] = [];
-  for (const m of ordenadas) {
-    const anterior = ajustadas[ajustadas.length - 1];
-    const pos = anterior && m.posicionPct - anterior.pos < SEPARACION_MIN_ETIQUETA_PCT
-      ? anterior.pos + SEPARACION_MIN_ETIQUETA_PCT
-      : m.posicionPct;
-    ajustadas.push({ id: m.id, pos: Math.min(100, pos) });
+  const n = ordenadas.length;
+  if (n === 0) return new Map();
+
+  const primera = ordenadas[0];
+  const adelante: number[] = [Math.max(primera?.posicionPct ?? 0, MARGEN_BORDE_ETIQUETA_PCT)];
+  for (let i = 1; i < n; i++) {
+    const actual = ordenadas[i];
+    const anterior = adelante[i - 1] ?? MARGEN_BORDE_ETIQUETA_PCT;
+    adelante.push(Math.max(actual?.posicionPct ?? 0, anterior + SEPARACION_MIN_ETIQUETA_PCT));
   }
-  return new Map(ajustadas.map((a) => [a.id, a.pos]));
+
+  const atras: number[] = [...adelante];
+  atras[n - 1] = Math.min(adelante[n - 1] ?? 0, 100 - MARGEN_BORDE_ETIQUETA_PCT);
+  for (let i = n - 2; i >= 0; i--) {
+    atras[i] = Math.min(adelante[i] ?? 0, (atras[i + 1] ?? 100) - SEPARACION_MIN_ETIQUETA_PCT);
+  }
+
+  return new Map(ordenadas.map((m, i) => [m.id, atras[i] ?? m.posicionPct]));
 }
 
 export interface MarcaRegla {
@@ -145,6 +184,32 @@ function marcaHtml(claseExtra: string, posicionPct: number, etiquetaPosicionPct:
     <span class="regla-marca-texto${claseExtra}" style="bottom:${String(etiquetaPosicionPct)}%">${texto}</span>`;
 }
 
+/**
+ * Umbral (en puntos porcentuales) a partir del cual se considera que el
+ * texto se movió de su marca y hace falta una línea guía (defecto G1): por
+ * debajo de esto la diferencia no se nota a simple vista y dibujar una línea
+ * sería ruido.
+ */
+const GUIA_UMBRAL_PCT = 0.5;
+
+/**
+ * Pure: línea guía SVG entre el tick (a `posicionPct`, escala exacta) y su
+ * etiqueta (a `etiquetaPosicionPct`, ya separada), o cadena vacía si no hubo
+ * desplazamiento. Arreglo de G1: antes una etiqueta desplazada quedaba sin
+ * ninguna marca visual de a qué tick pertenecía (ver diagnóstico en el
+ * comentario de `separarEtiquetas`). Coordenadas en el mismo `viewBox 0 0
+ * 100 100` que `regla-guias` en style.css: x1/x2 son aproximaciones del
+ * centro del tick (izquierda del eje) y el inicio del texto, en % del ancho
+ * de `.regla-hidrometrica` (9rem): tick en 0,3rem/9rem y texto en
+ * 0,8rem/9rem.
+ */
+function lineaGuiaSvg(claseExtra: string, posicionPct: number, etiquetaPosicionPct: number): string {
+  if (Math.abs(posicionPct - etiquetaPosicionPct) < GUIA_UMBRAL_PCT) return "";
+  const y1 = 100 - posicionPct;
+  const y2 = 100 - etiquetaPosicionPct;
+  return `<line class="regla-marca-guia${claseExtra}" x1="3.3" y1="${String(y1)}" x2="8.9" y2="${String(y2)}" />`;
+}
+
 export function buildReglaHidrometricaHtml(view: ReglaHidrometricaView): string {
   const marcasHtml = view.marcas
     .map((m) => marcaHtml("", m.posicionPct, m.etiquetaPosicionPct, `${formatMetros(m.alturaM)} — ${m.etiqueta}`))
@@ -154,10 +219,17 @@ export function buildReglaHidrometricaHtml(view: ReglaHidrometricaView): string 
     ? marcaHtml(" regla-marca--hoy", view.hoy.posicionPct, view.hoy.etiquetaPosicionPct, `Hoy: ${view.hoy.texto}`)
     : "";
 
+  const guiasHtml =
+    view.marcas.map((m) => lineaGuiaSvg("", m.posicionPct, m.etiquetaPosicionPct)).join("") +
+    (view.hoy ? lineaGuiaSvg(" regla-marca--hoy", view.hoy.posicionPct, view.hoy.etiquetaPosicionPct) : "");
+
   return `
     <div class="regla-hidrometrica" role="img" aria-label="Regla hidrométrica del puerto de Colón, con los tres niveles de aviso y la altura de hoy">
       <div class="regla-hidrometrica-eje">
-        <div class="regla-marcas">${marcasHtml}${hoyHtml}</div>
+        <div class="regla-marcas">
+          <svg class="regla-guias" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">${guiasHtml}</svg>
+          ${marcasHtml}${hoyHtml}
+        </div>
       </div>
     </div>
   `;

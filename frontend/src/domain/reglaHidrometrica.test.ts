@@ -79,6 +79,41 @@ describe("deriveReglaHidrometricaView", () => {
     expect(alerta.etiquetaPosicionPct - preventiva.etiquetaPosicionPct).toBeGreaterThanOrEqual(22 - 1e-9);
     expect(evacuacion.etiquetaPosicionPct - alerta.etiquetaPosicionPct).toBeGreaterThanOrEqual(22 - 1e-9);
   });
+
+  /**
+   * G1 (revisión de diseño, medido en navegador a 1920 px): "Alerta (7,10)"
+   * quedaba pegada a la marca de 7,90, y "Evacuación (7,90)" flotaba fuera
+   * de la barra. Estos casos cubren exactamente esas condiciones: ninguna
+   * etiqueta puede terminar por fuera de [0, 100] (idealmente ni siquiera
+   * cerca del borde, ver `MARGEN_BORDE_ETIQUETA_PCT`), para cualquier altura
+   * de hoy razonable.
+   */
+  it.each([null, 0, 0.1, 4.29, 6.8, 6.95, 7.1, 7.5, 7.9, 8.87, 10, 20])(
+    "G1: ninguna etiqueta queda fuera de la barra con altura de hoy = %s",
+    (alturaHoyM) => {
+      const vista = deriveReglaHidrometricaView(alturaHoyM);
+      const todas = [...vista.marcas, ...(vista.hoy ? [vista.hoy] : [])];
+      for (const m of todas) {
+        expect(m.etiquetaPosicionPct).toBeGreaterThanOrEqual(0);
+        expect(m.etiquetaPosicionPct).toBeLessThanOrEqual(100);
+      }
+    },
+  );
+
+  it("G1: mantiene el orden y la separación mínima incluso cuando hoy coincide con un umbral", () => {
+    // Caso límite: 4 marcas (3 umbrales + hoy) con dos posiciones naturales
+    // idénticas, el escenario que más aprieta el algoritmo de separación.
+    const vista = deriveReglaHidrometricaView(7.9);
+    const posiciones = [...vista.marcas.map((m) => m.etiquetaPosicionPct), vista.hoy?.etiquetaPosicionPct ?? 0].sort(
+      (a, b) => a - b,
+    );
+    for (let i = 1; i < posiciones.length; i++) {
+      const actual = posiciones[i];
+      const anterior = posiciones[i - 1];
+      if (actual === undefined || anterior === undefined) continue;
+      expect(actual - anterior).toBeGreaterThanOrEqual(22 - 1e-9);
+    }
+  });
 });
 
 describe("buildReglaHidrometricaHtml", () => {
@@ -93,5 +128,25 @@ describe("buildReglaHidrometricaHtml", () => {
   it("sin altura de hoy no muestra la marca de hoy", () => {
     const html = buildReglaHidrometricaHtml(deriveReglaHidrometricaView(null));
     expect(html).not.toContain("Hoy:");
+  });
+
+  it("G1: dibuja una línea guía por cada etiqueta que se desplazó de su tick", () => {
+    const vista = deriveReglaHidrometricaView(4.29);
+    const html = buildReglaHidrometricaHtml(vista);
+    const desplazadas = vista.marcas.filter((m) => Math.abs(m.posicionPct - m.etiquetaPosicionPct) >= 0.5);
+    expect(desplazadas.length).toBeGreaterThan(0); // el propio escenario del bug real
+    const lineas = html.match(/<line class="regla-marca-guia/g) ?? [];
+    expect(lineas.length).toBeGreaterThanOrEqual(desplazadas.length);
+  });
+
+  it("G1: no dibuja línea guía cuando la etiqueta no se movió (distancia 0)", () => {
+    // Un único umbral, sin hoy: nada que separar, tick y etiqueta coinciden.
+    const vista = deriveReglaHidrometricaView(null);
+    // Fuerza el caso de una sola marca para aislar "sin desplazamiento".
+    const marca = vista.marcas[0];
+    if (!marca) throw new Error("se esperaba al menos una marca");
+    expect(marca.posicionPct).toBe(marca.etiquetaPosicionPct);
+    const html = buildReglaHidrometricaHtml({ escala: vista.escala, marcas: [marca], hoy: null });
+    expect(html).not.toContain("regla-marca-guia");
   });
 });
