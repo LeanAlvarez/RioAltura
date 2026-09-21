@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { Anclaje } from "./api/types";
-import { loadDashboardData, nivelMaximoEstimado } from "./app";
+import type { Anclaje, UltimaAltura } from "./api/types";
+import { loadDashboardData, nivelActualEstimado, nivelMaximoEstimado } from "./app";
 
-const ULTIMA_ALTURA = {
+const ULTIMA_ALTURA: UltimaAltura = {
   fecha_hora: "2026-09-21T14:20:00Z",
   altura_m: 3.67,
   fuente: "ina",
@@ -121,5 +121,16 @@ describe("nivelMaximoEstimado", () => {
     });
     // Anclado: la altura_anclada_m máxima entre lead >= 1 es la del 23/9 (6,6), no la altura_est_m cruda (6,3).
     expect(nivel).toBe(6.6);
+  });
+});
+
+describe("nivelActualEstimado", () => {
+  it("es null cuando la altura de hoy no está disponible", () => {
+    expect(nivelActualEstimado({ kind: "error" })).toBeNull();
+    expect(nivelActualEstimado({ kind: "not-found" })).toBeNull();
+  });
+
+  it("toma la altura real medida cuando hay dato", () => {
+    expect(nivelActualEstimado({ kind: "ok", data: ULTIMA_ALTURA })).toBe(3.67);
   });
 });

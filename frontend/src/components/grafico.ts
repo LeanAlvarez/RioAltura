@@ -99,10 +99,28 @@ interface EstadoGrafico {
   mostrarHistorico: boolean;
 }
 
-const THRESHOLD_DEFS: ReadonlyArray<{ valor: number; label: string; variable: string; fallback: string }> = [
-  { valor: EVACUACION_EN_SECO_M, label: "Evacuación en seco", variable: "--warn", fallback: "#a35d00" },
-  { valor: ALERTA_M, label: "Alerta", variable: "--error", fallback: "#b3261e" },
-  { valor: EVACUACION_M, label: "Evacuación", variable: "--danger", fallback: "#7a1014" },
+/**
+ * `dash` distingue cada umbral aunque los colores se vean parecidos (nunca
+ * depende solo del color, CLAUDE.md §7). "Evacuación" usa `--danger-etiqueta`
+ * en vez de `--danger`: al lado de "Alerta" (`--error`) los dos rojos
+ * originales eran casi idénticos (ítem 6, correcciones de diseño).
+ */
+const THRESHOLD_DEFS: ReadonlyArray<{
+  valor: number;
+  label: string;
+  variable: string;
+  fallback: string;
+  dash: number[];
+}> = [
+  { valor: EVACUACION_EN_SECO_M, label: "Evacuación en seco", variable: "--warn", fallback: "#a35d00", dash: [4, 4] },
+  { valor: ALERTA_M, label: "Alerta", variable: "--error", fallback: "#b3261e", dash: [7, 3] },
+  {
+    valor: EVACUACION_M,
+    label: "Evacuación",
+    variable: "--danger-etiqueta",
+    fallback: "#8a1a63",
+    dash: [2, 3],
+  },
 ];
 
 /** Lee un color desde una custom property CSS, para que el gráfico se adapte a modo claro/oscuro. */
@@ -123,7 +141,7 @@ function construirColores(referencia: HTMLElement) {
 const fechaEjeFormatter = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short" });
 const metrosEjeFormatter = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 });
 
-const ALTO_ETIQUETA_UMBRAL = 16;
+const ALTO_ETIQUETA_UMBRAL = 20;
 
 interface EtiquetaUmbralEl {
   el: HTMLDivElement;
@@ -216,7 +234,7 @@ function construirOpciones(
       label: t.label,
       stroke: t.color,
       width: 1,
-      dash: [4, 4],
+      dash: t.dash,
       points: { show: false },
     });
   }
@@ -269,8 +287,8 @@ interface LeyendaItem {
 function construirItemsLeyenda(colores: ReturnType<typeof construirColores>, mostrarHistorico: boolean): LeyendaItem[] {
   const items: LeyendaItem[] = [
     { label: "Altura real", color: colores.real, dash: false },
-    { label: "Pronóstico (rango)", color: colores.pronostico, dash: false },
-    { label: "Pronóstico (centro)", color: colores.pronostico, dash: true },
+    { label: "Entre lo mínimo y lo máximo", color: colores.pronostico, dash: false },
+    { label: "Lo más probable", color: colores.pronostico, dash: true },
   ];
   if (mostrarHistorico) {
     items.push({ label: "Pronóstico a 3 días (histórico)", color: colores.historico, dash: true });
@@ -331,7 +349,7 @@ export function mountGrafico(container: HTMLElement, deps: GraficoDeps = default
       </div>
       <label class="toggle-historico">
         <input type="checkbox" id="toggle-historico" />
-        Mostrar pronóstico a 3 días que se hizo en su momento
+        Ver qué decía el pronóstico esos días
       </label>
     </div>
     <div class="grafico-canvas-wrap">

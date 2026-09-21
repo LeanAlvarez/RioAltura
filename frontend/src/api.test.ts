@@ -64,7 +64,7 @@ describe("fetchHealth", () => {
 });
 
 describe("describeHealth", () => {
-  it("traduce cada estado a un texto claro con fecha de actualización", () => {
+  it("traduce cada estado a un texto claro, en lenguaje llano y sin fecha (la tarjeta 'Hoy' ya la muestra)", () => {
     expect(describeHealth({ kind: "loading" }).tone).toBe("muted");
 
     const ok = describeHealth({
@@ -73,7 +73,7 @@ describe("describeHealth", () => {
       checkedAt: fixedNow(),
     });
     expect(ok.tone).toBe("ok");
-    expect(ok.detail).toMatch(/^Actualizado: /);
+    expect(ok.label).toBe("Datos al día");
 
     const dbDown = describeHealth({
       kind: "ready",
@@ -82,6 +82,8 @@ describe("describeHealth", () => {
     });
     expect(dbDown.tone).toBe("warn");
 
-    expect(describeHealth({ kind: "unreachable", checkedAt: fixedNow() }).tone).toBe("error");
+    const unreachable = describeHealth({ kind: "unreachable", checkedAt: fixedNow() });
+    expect(unreachable.tone).toBe("error");
+    expect(unreachable.label).toBe("Sin conexión con los datos");
   });
 });

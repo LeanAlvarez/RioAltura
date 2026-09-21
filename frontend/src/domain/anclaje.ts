@@ -7,5 +7,5 @@ import type { Anclaje } from "../api/types";
  */
 export function describeAnclaje(anclaje: Anclaje): string | null {
   if (!anclaje.aplicado) return null;
-  return "Ajustado a la altura real de hoy: corregimos el pronóstico para que no contradiga lo que el río ya está midiendo en el puerto.";
+  return "El pronóstico está ajustado con la medición de hoy en el puerto.";
 }

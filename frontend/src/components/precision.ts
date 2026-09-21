@@ -48,12 +48,24 @@ export function buildPrecisionSeries(alturas: readonly AlturaDiaria[], historico
   };
 }
 
-/** Pure: "En promedio se equivoca ±X,X m", en lenguaje llano. No DOM. */
+/** Pure: "el pronóstico le erró medio metro en promedio", en lenguaje llano. No DOM. */
 export function describeErrorPronostico(error: ErrorPronostico): string {
   if (error.mae_m === null || error.muestras === 0) {
     return "Todavía no hay suficientes días comparados para calcular el error del pronóstico.";
   }
-  return `En promedio, el pronóstico a ${error.lead_dias} días se equivoca ±${formatMetros(error.mae_m).replace(" m", "")} m, comparado con ${error.muestras} días.`;
+  return `Mirando los últimos ${error.muestras} días, el pronóstico a ${error.lead_dias} días le erró ${formatMetros(error.mae_m)} en promedio, para arriba o para abajo.`;
+}
+
+/**
+ * Pure: alternativa de texto al gráfico (ítem 9, correcciones de diseño:
+ * replicar "Ver como texto" — ya existía solo en el gráfico principal). No DOM.
+ */
+export function buildResumenTextoPrecision(series: PrecisionSeries): string {
+  const reales = series.real.filter((v): v is number => v !== null);
+  if (reales.length === 0) return "Todavía no hay datos reales para comparar en este período.";
+  const min = Math.min(...reales);
+  const max = Math.max(...reales);
+  return `Altura real en el período: entre ${formatMetros(min)} y ${formatMetros(max)}, comparada día a día con lo que decía el pronóstico hecho ${String(LEAD_DIAS_COMPARADO)} días antes.`;
 }
 
 export interface PrecisionDeps {
@@ -83,16 +95,25 @@ export function mountPrecision(container: HTMLElement, deps: PrecisionDeps = def
     <h2>¿Cuánto acierta el pronóstico?</h2>
     <p class="precision-frase" id="precision-frase"></p>
     <div class="grafico-canvas" id="precision-canvas"></div>
+    <ul class="grafico-leyenda" aria-hidden="true">
+      <li><span class="grafico-leyenda-linea" style="--color-linea:var(--fg)"></span> Lo que midió el INA</li>
+      <li><span class="grafico-leyenda-linea grafico-leyenda-linea--punteada" style="--color-linea:var(--muted)"></span> Lo que decía el pronóstico</li>
+    </ul>
     <p class="grafico-estado" role="status" aria-live="polite"></p>
+    <details class="grafico-alternativa">
+      <summary>Ver como texto</summary>
+      <p class="grafico-resumen"></p>
+    </details>
   `;
 
   const fraseEl = container.querySelector<HTMLParagraphElement>("#precision-frase");
   const canvasEl = container.querySelector<HTMLDivElement>("#precision-canvas");
   const estadoEl = container.querySelector<HTMLParagraphElement>(".grafico-estado");
-  if (!fraseEl || !canvasEl || !estadoEl) return;
+  const resumenEl = container.querySelector<HTMLParagraphElement>(".grafico-resumen");
+  if (!fraseEl || !canvasEl || !estadoEl || !resumenEl) return;
 
   async function cargar(): Promise<void> {
-    if (!fraseEl || !canvasEl || !estadoEl) return;
+    if (!fraseEl || !canvasEl || !estadoEl || !resumenEl) return;
     estadoEl.textContent = "Cargando…";
     const ahora = new Date();
     const { desde, hasta } = calcularRangoPrecision(ahora);
@@ -115,6 +136,7 @@ export function mountPrecision(container: HTMLElement, deps: PrecisionDeps = def
     estadoEl.textContent = "";
 
     const series = buildPrecisionSeries(alturasResult.data, historicoResult.data);
+    resumenEl.textContent = buildResumenTextoPrecision(series);
     const colorReal = leerColor("--fg", "#1c2430", container);
     const colorPronostico = leerColor("--muted", "#7a4fa3", container);
 

@@ -22,11 +22,25 @@ describe("deriveContextoView", () => {
     expect(deriveContextoView({ kind: "error" })).toEqual({ kind: "error" });
   });
 
-  it("redondea el percentil a un entero, en lenguaje llano", () => {
+  it("traduce el percentil a 'X de cada 10 días', en lenguaje llano", () => {
     const view = deriveContextoView({ kind: "ok", data: estadisticas() });
     expect(view.kind).toBe("ready");
     if (view.kind !== "ready") return;
-    expect(view.fraseAmpliada).toBe("Hoy el río está más alto que el 83 % de los días del último año.");
+    // percentil 83,4 -> 8 de cada 10; altura 4,29 m está a 2,51 m de los 6,80
+    // m (>= 1 m de margen de estimación), así que agrega la coletilla.
+    expect(view.fraseAmpliada).toBe(
+      "En el último año, 8 de cada 10 días el río estuvo más bajo que hoy. Igual, sigue lejos de cualquier alerta.",
+    );
+  });
+
+  it("no agrega la coletilla de 'lejos de cualquier alerta' cuando no lo está", () => {
+    const view = deriveContextoView({
+      kind: "ok",
+      data: estadisticas({ percentil_hoy: { altura_m: 6.5, percentil: 95, ventana_dias: 365 } }),
+    });
+    expect(view.kind).toBe("ready");
+    if (view.kind !== "ready") return;
+    expect(view.fraseAmpliada).toBe("En el último año, 10 de cada 10 días el río estuvo más bajo que hoy.");
   });
 
   it("arma comparaciones por año con hoy incluido y porcentajes relativos", () => {

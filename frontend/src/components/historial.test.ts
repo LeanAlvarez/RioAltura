@@ -4,6 +4,7 @@ import {
   buildEventoPuntos,
   buildHistorialSeries,
   buildRangosSombreados,
+  buildResumenTextoHistorial,
   calcularRangoHistorico,
 } from "./historial";
 
@@ -45,5 +46,23 @@ describe("buildEventoPuntos", () => {
     const puntos = buildEventoPuntos(eventos);
     expect(puntos).toHaveLength(1);
     expect(puntos[0]).toMatchObject({ y: 9.06, etiqueta: "Máximo diario registrado (INA)", fecha: "2024-05-14" });
+  });
+});
+
+describe("buildResumenTextoHistorial", () => {
+  it("da una alternativa de texto con el rango real y las crecidas de referencia (ítem 9)", () => {
+    const alturas: AlturaDiaria[] = [
+      { fecha: "2024-05-13", altura_m: 8.4 },
+      { fecha: "2024-05-14", altura_m: 9.06 },
+    ];
+    const puntos = buildEventoPuntos([{ fecha: "2024-05-14", altura_m: 9.06, etiqueta: "Máximo diario registrado (INA)" }]);
+    const texto = buildResumenTextoHistorial(alturas, puntos);
+    expect(texto).toContain("8,40 m");
+    expect(texto).toContain("9,06 m");
+    expect(texto).toContain("Máximo diario registrado (INA)");
+  });
+
+  it("avisa cuando no hay datos reales", () => {
+    expect(buildResumenTextoHistorial([], [])).toMatch(/no hay datos/);
   });
 });

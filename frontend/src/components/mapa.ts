@@ -9,6 +9,7 @@
 export interface MapModule {
   createMap?: (container: HTMLElement) => unknown;
   setNivelPronosticado?: (nivelM: number) => void;
+  setNivelActual?: (nivelM: number) => void;
 }
 
 function renderPlaceholder(container: HTMLElement): void {
@@ -20,6 +21,7 @@ function renderPlaceholder(container: HTMLElement): void {
 export async function mountMapa(
   container: HTMLElement,
   nivelMaximoM: number | null,
+  nivelActualM: number | null = null,
   loadModule: () => Promise<MapModule> = () => import("../map"),
 ): Promise<void> {
   let mod: MapModule;
@@ -45,6 +47,14 @@ export async function mountMapa(
   if (nivelMaximoM !== null && typeof mod.setNivelPronosticado === "function") {
     try {
       mod.setNivelPronosticado(nivelMaximoM);
+    } catch {
+      // El mapa ya se montó; no tumbamos la página por esto.
+    }
+  }
+
+  if (nivelActualM !== null && typeof mod.setNivelActual === "function") {
+    try {
+      mod.setNivelActual(nivelActualM);
     } catch {
       // El mapa ya se montó; no tumbamos la página por esto.
     }

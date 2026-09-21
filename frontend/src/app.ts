@@ -33,3 +33,12 @@ export function nivelMaximoEstimado(pronostico: FetchResult<Pronostico>): number
   for (const dia of pool) if (dia.altura_anclada_m > max) max = dia.altura_anclada_m;
   return max;
 }
+
+/**
+ * La altura real medida hoy, para que el mapa (spec 007, correcciones de
+ * diseño, ítem 3) pueda mostrar "hoy está en X m" junto al escenario
+ * seleccionado, siempre visible, sin abrir el panel de controles.
+ */
+export function nivelActualEstimado(altura: FetchResult<UltimaAltura>): number | null {
+  return altura.kind === "ok" ? altura.data.altura_m : null;
+}

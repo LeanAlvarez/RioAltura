@@ -60,7 +60,7 @@ const fechaGeneradoFormatter = new Intl.DateTimeFormat("es-AR", { dateStyle: "sh
 function formatGenerado(iso: string): string {
   const fecha = new Date(iso);
   if (Number.isNaN(fecha.getTime())) return "";
-  return `Capas generadas el ${fechaGeneradoFormatter.format(fecha)}`;
+  return `Mapa calculado el ${fechaGeneradoFormatter.format(fecha)}`;
 }
 
 export interface MapaInundacion {
@@ -112,6 +112,36 @@ interface Panel {
   render(vista: VistaMapa): void;
 }
 
+/**
+ * Franja siempre visible, FUERA del `<details>` colapsable (correcciones de
+ * diseño, spec 007 ítem 3): en mobile el panel arranca plegado (M2), así que
+ * sin esto no había forma de saber a qué altura correspondían las manchas
+ * azules del mapa, ni de leer la leyenda de profundidad — información que
+ * dependía solo de abrir un acordeón (y, para el color, solo del color;
+ * CLAUDE.md §7 lo prohíbe).
+ */
+function crearResumenSiempreVisible(container: HTMLElement, index: CapaIndex): Panel {
+  const resumen = L.DomUtil.create("div", "mapa-inundacion-resumen", container);
+  const mostrandoEl = L.DomUtil.create("p", "mapa-inundacion-mostrando", resumen);
+
+  const leyenda = L.DomUtil.create("ul", "capas-leyenda", resumen);
+  for (const clase of index.clases) {
+    const item = L.DomUtil.create(
+      "li",
+      `capas-leyenda-item capas-leyenda-clase-${String(clase.clase)}`,
+      leyenda,
+    );
+    item.textContent = clase.etiqueta;
+  }
+
+  return {
+    render(vista) {
+      const actual = vista.textos.actual ?? "sin dato todavía";
+      mostrandoEl.textContent = `Mostrando: si el río llega a ${vista.textos.altura} — hoy está en ${actual}.`;
+    },
+  };
+}
+
 function crearPanel(container: HTMLElement, index: CapaIndex, estado: EstadoMapa): Panel {
   // Spec 007 M2: el panel es un `<details>` plegable *fuera* del lienzo del
   // mapa (ver `createMap`, que ya no lo pasa como hijo del contenedor de
@@ -126,9 +156,11 @@ function crearPanel(container: HTMLElement, index: CapaIndex, estado: EstadoMapa
   L.DomEvent.disableClickPropagation(panel);
   L.DomEvent.disableScrollPropagation(panel);
 
+  // "m IGN" (item 8, correcciones de diseño): jerga técnica de datum
+  // geodésico que no aporta a la vista principal; vive en "Detalle técnico"
+  // (detalleTecnico.ts) en vez de acá.
   const lectura = L.DomUtil.create("div", "capas-lectura", panel);
   const alturaEl = L.DomUtil.create("strong", "capas-altura", lectura);
-  const cotaEl = L.DomUtil.create("span", "capas-cota", lectura);
   const hectareasEl = L.DomUtil.create("span", "capas-hectareas", lectura);
   const mostrandoEl = L.DomUtil.create("span", "capas-mostrando", lectura);
 
@@ -163,16 +195,8 @@ function crearPanel(container: HTMLElement, index: CapaIndex, estado: EstadoMapa
     botones.set(escenario.id, boton);
   }
 
-  const leyenda = L.DomUtil.create("ul", "capas-leyenda", panel);
-  for (const clase of index.clases) {
-    const item = L.DomUtil.create(
-      "li",
-      `capas-leyenda-item capas-leyenda-clase-${String(clase.clase)}`,
-      leyenda,
-    );
-    item.textContent = clase.etiqueta;
-  }
-
+  // La leyenda de profundidad vive en `crearResumenSiempreVisible`, fuera de
+  // este panel colapsable, para que se vea sin abrir nada (ítem 3).
   const generadoEl = L.DomUtil.create("p", "capas-generado", panel);
   generadoEl.textContent = formatGenerado(index.generado);
 
@@ -185,7 +209,6 @@ function crearPanel(container: HTMLElement, index: CapaIndex, estado: EstadoMapa
   return {
     render(vista) {
       alturaEl.textContent = vista.textos.altura;
-      cotaEl.textContent = vista.textos.cota;
       hectareasEl.textContent = vista.textos.hectareas;
       mostrandoEl.textContent = vista.textos.mostrando ?? "";
       zonasEl.textContent = `Si el río llega a ${vista.textos.altura}, estas zonas podrían inundarse.`;
@@ -227,6 +250,9 @@ export function createMap(container: HTMLElement): MapaInundacion {
   // y el panel se dibujaba encima como overlay).
   container.classList.add("mapa-inundacion-root");
   const lienzo = L.DomUtil.create("div", "mapa-inundacion-lienzo", container);
+  // Entre el lienzo y el panel plegable a propósito (ítem 3): siempre
+  // visible, sin depender de que el usuario abra el panel de controles.
+  const resumenWrap = L.DomUtil.create("div", "mapa-inundacion-resumen-wrap", container);
   const panelWrap = L.DomUtil.create("div", "mapa-inundacion-panel-wrap", container);
 
   const map = L.map(lienzo, { zoomControl: true }).setView(COLON_CENTER, COLON_ZOOM);
@@ -235,6 +261,8 @@ export function createMap(container: HTMLElement): MapaInundacion {
   layers["Satélite"]?.addTo(map);
   L.control.layers(layers, {}, { position: "topright", collapsed: true }).addTo(map);
 
+  // Rótulo permanente (ítem 9, correcciones de diseño): el punto blanco y
+  // azul no decía qué era hasta hacer click.
   L.circleMarker(PUERTO_HIDROMETRO, {
     radius: 7,
     weight: 2,
@@ -243,12 +271,21 @@ export function createMap(container: HTMLElement): MapaInundacion {
     fillOpacity: 1,
   })
     .addTo(map)
+    .bindTooltip("Hidrómetro del puerto de Colón", {
+      // "left", no "right": el hidrómetro está cerca del borde este de la
+      // vista inicial del mapa (verificado a 360 px); con "right" el rótulo
+      // se salía del lienzo y quedaba cortado.
+      permanent: true,
+      direction: "left",
+      offset: [-8, 0],
+      className: "hidrometro-tooltip",
+    })
     .bindPopup("Hidrómetro del puerto de Colón");
 
   const avisoModelo = new L.Control({ position: "topleft" });
   avisoModelo.onAdd = () => {
     const div = L.DomUtil.create("div", "capas-aviso-modelo");
-    div.textContent = "Modelo simplificado sobre elevación satelital. Orientativo.";
+    div.textContent = "Es un cálculo aproximado hecho con imágenes satelitales. Puede fallar.";
     L.DomEvent.disableClickPropagation(div);
     return div;
   };
@@ -283,6 +320,7 @@ export function createMap(container: HTMLElement): MapaInundacion {
 
       const estado = createEstadoMapa(index);
       const cache = createCapaCache();
+      const resumen = crearResumenSiempreVisible(resumenWrap, index);
       const panel = crearPanel(panelWrap, index, estado);
 
       let capaActual: L.GeoJSON | null = null;
@@ -292,6 +330,7 @@ export function createMap(container: HTMLElement): MapaInundacion {
       errorCapa.hidden = true;
 
       estado.subscribe((vista) => {
+        resumen.render(vista);
         panel.render(vista);
         emitirSeleccion(vista.seleccion);
         const miSolicitud = ++solicitudId;

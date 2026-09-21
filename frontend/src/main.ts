@@ -2,7 +2,7 @@ import "./style.css";
 import { fetchHealth } from "./api";
 import { getPronostico, getPronosticoAguasArriba } from "./api/pronostico";
 import { renderHealth } from "./health";
-import { loadDashboardData, nivelMaximoEstimado } from "./app";
+import { loadDashboardData, nivelActualEstimado, nivelMaximoEstimado } from "./app";
 import { deriveEstadoHoyView, renderEstadoHoy } from "./components/estadoHoy";
 import { deriveProximosDiasView, renderProximosDias } from "./components/proximosDias";
 import { mountGrafico } from "./components/grafico";
@@ -31,6 +31,12 @@ app.innerHTML = `
     <section id="tarjeta-proximos" class="card" aria-live="polite"></section>
     <section id="tarjeta-grafico" class="card card--grafico"></section>
     <section id="tarjeta-mapa" class="card card--mapa" aria-label="Mapa de Colón"></section>
+    <!--
+      Fuera de la tarjeta a propósito (CLAUDE.md §7, spec 007 ítem 1): mountMapa
+      controla todo el innerHTML de #tarjeta-mapa (incluido el placeholder de
+      fallback), así que un disclaimer adentro se perdería si el mapa no carga.
+    -->
+    <p class="disclaimer-corta disclaimer-corta--mapa">Orientativo. No reemplaza a Prefectura ni a Defensa Civil.</p>
     <section id="tarjeta-superficie" class="card"></section>
     <section id="tarjeta-aguas-arriba" class="card" aria-live="polite"></section>
     <section id="tarjeta-contexto" class="card" aria-live="polite"></section>
@@ -74,7 +80,7 @@ renderHealth(healthEl, { kind: "loading" });
 void fetchHealth().then((state) => renderHealth(healthEl, state));
 
 renderEstadoHoy(hoyEl, deriveEstadoHoyView({ kind: "loading" }, new Date()));
-renderProximosDias(proximosEl, deriveProximosDiasView({ kind: "loading" }));
+renderProximosDias(proximosEl, deriveProximosDiasView({ kind: "loading" }, new Date()));
 renderPie(pieEl);
 mountGrafico(graficoEl);
 mountSuperficieAfectada(superficieEl);
@@ -86,6 +92,6 @@ mountDetalleTecnico(detalleEl, { getPronostico, getPronosticoAguasArriba });
 
 void loadDashboardData().then(({ altura, pronostico }) => {
   renderEstadoHoy(hoyEl, deriveEstadoHoyView(altura, new Date()));
-  renderProximosDias(proximosEl, deriveProximosDiasView(pronostico));
-  void mountMapa(mapaEl, nivelMaximoEstimado(pronostico));
+  renderProximosDias(proximosEl, deriveProximosDiasView(pronostico, new Date()));
+  void mountMapa(mapaEl, nivelMaximoEstimado(pronostico), nivelActualEstimado(altura));
 });

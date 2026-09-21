@@ -22,6 +22,8 @@ const caudalFormatter = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 
 
 const diaSemanaFormatter = new Intl.DateTimeFormat("es-AR", { weekday: "long", day: "numeric" });
 const diaCortoFormatter = new Intl.DateTimeFormat("es-AR", { weekday: "short", day: "numeric" });
+const horaFormatter = new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+const fechaCortaFormatter = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "numeric" });
 
 /** "3,67 m" */
 export function formatMetros(valueM: number, decimales = 2): string {
@@ -89,4 +91,22 @@ export function formatHaceTiempo(fecha: Date, ahora: Date): string {
 /** Horas transcurridas entre `fecha` y `ahora` (siempre >= 0). */
 export function horasDesde(fecha: Date, ahora: Date): number {
   return Math.max(0, ahora.getTime() - fecha.getTime()) / 3_600_000;
+}
+
+function esMismoDiaLocal(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+/**
+ * "hoy a las 00:00" / "ayer a las 23:00" / "el 19/9 a las 10:00". Sin color
+ * ni umbral de antigüedad: solo dice cuándo fue la medición (CLAUDE.md §6),
+ * en lenguaje llano, para que la tarjeta "Hoy" no mezcle esto con un aviso.
+ */
+export function formatMomentoMedicion(fecha: Date, ahora: Date): string {
+  const hora = horaFormatter.format(fecha);
+  if (esMismoDiaLocal(fecha, ahora)) return `hoy a las ${hora}`;
+  const ayer = new Date(ahora);
+  ayer.setDate(ayer.getDate() - 1);
+  if (esMismoDiaLocal(fecha, ayer)) return `ayer a las ${hora}`;
+  return `el ${fechaCortaFormatter.format(fecha)} a las ${hora}`;
 }

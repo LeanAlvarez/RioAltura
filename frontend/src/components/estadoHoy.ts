@@ -1,8 +1,7 @@
 import type { FetchResult } from "../api/client";
 import type { UltimaAltura } from "../api/types";
-import { describeEstado } from "../domain/estado";
-import { HORAS_DATO_VIEJO } from "../domain/dominio";
-import { formatHaceTiempo, formatMetros, formatTendencia, horasDesde } from "../format";
+import { describeDistanciaUmbral, describeEstado } from "../domain/estado";
+import { formatMetros, formatMomentoMedicion, formatTendencia } from "../format";
 import { renderCardError, renderCardSkeleton } from "./card";
 
 export type EstadoHoyState = { kind: "loading" } | FetchResult<UltimaAltura>;
@@ -15,9 +14,9 @@ export type EstadoHoyView =
       altura: string;
       estadoLabel: string;
       estadoTono: "ok" | "warn" | "error" | "danger";
+      distanciaUmbral: string;
       tendencia: string;
-      actualizado: string;
-      datoViejo: boolean;
+      medicion: string;
     };
 
 /** Pure derivation: state + current time -> what the card should show. No DOM. */
@@ -34,9 +33,13 @@ export function deriveEstadoHoyView(state: EstadoHoyState, ahora: Date): EstadoH
     altura: formatMetros(data.altura_m),
     estadoLabel: estado.label,
     estadoTono: estado.tono,
+    distanciaUmbral: describeDistanciaUmbral(data.altura_m),
     tendencia: formatTendencia(data.tendencia_24h_m),
-    actualizado: formatHaceTiempo(fecha, ahora),
-    datoViejo: horasDesde(fecha, ahora) > HORAS_DATO_VIEJO,
+    // Correcciones de diseño (spec 007, ítem 4): el atraso del INA es su
+    // operación normal (CLAUDE.md, "Fuera de alcance"), no un aviso de
+    // riesgo: se dice sin color de alarma y sin umbral interno. La
+    // fecha/hora del dato sigue visible (CLAUDE.md §6).
+    medicion: `Última medición del puerto: ${formatMomentoMedicion(fecha, ahora)}.`,
   };
 }
 
@@ -56,9 +59,8 @@ export function renderEstadoHoy(container: HTMLElement, view: EstadoHoyView): vo
     <h2>${TITULO}</h2>
     <p class="altura-actual">${view.altura}</p>
     <p class="badge" data-tono="${view.estadoTono}">${view.estadoLabel}</p>
+    <p class="umbral-distancia">${view.distanciaUmbral}</p>
     <p class="tendencia">${view.tendencia} en las últimas 24 h</p>
-    <p class="actualizado${view.datoViejo ? " actualizado--viejo" : ""}">
-      Actualizado ${view.actualizado}${view.datoViejo ? " — dato desactualizado (más de 6 h)" : ""}
-    </p>
+    <p class="medicion">${view.medicion}</p>
   `;
 }

@@ -83,6 +83,14 @@ export function renderDetalleTecnico(container: HTMLElement, view: DetalleTecnic
           disponible. El nivel de aviso se calcula por caudal pronosticado a 3 días, no por la altura
           anclada.
         </p>
+        <p class="card-subtitulo">
+          Ajustado a la altura real de hoy: corregimos el pronóstico para que no contradiga lo que el
+          río ya está midiendo en el puerto.
+        </p>
+        <p class="card-subtitulo">
+          El cero del hidrómetro del puerto está en −0,26 m IGN (nivel del mar); para pasar una altura
+          del puerto a cota IGN, restale 0,26 m.
+        </p>
       </div>
     </details>
   `;

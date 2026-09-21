@@ -26,7 +26,7 @@ export function deriveAguasArribaView(state: AguasArribaState): AguasArribaView 
   }
 
   const tendencia = calcularTendencia(ultimo.altura_anclada_m - primero.altura_anclada_m);
-  const frase = `Aguas arriba (zona Concordia / Salto Grande), el río podría estar entre ${formatRangoMetros(
+  const frase = `Aguas arriba (zona Concordia / Salto Grande), el río podría estar ${formatRangoMetros(
     ultimo.altura_anclada_min_m,
     ultimo.altura_anclada_max_m,
   )} el ${formatDiaSemanaFecha(ultimo.fecha)}. Lo que pasa allá llega a Colón unos días después.`;

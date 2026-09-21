@@ -59,6 +59,11 @@ const defaultDeps: SuperficieAfectadaDeps = {
 
 const ANCHO_SVG = 320;
 const ALTO_SVG = 120;
+// Márgenes para los rótulos de eje (ítem 9, correcciones de diseño): la
+// curva original no tenía ningún eje, así que ninguna de las dos escalas
+// (metros / hectáreas) era legible sin adivinar.
+const MARGEN_IZQUIERDO = 46;
+const MARGEN_INFERIOR = 16;
 
 /**
  * "Superficie afectada" (spec 007 T7): curva de hectáreas inundadas por
@@ -78,13 +83,24 @@ export function mountSuperficieAfectada(container: HTMLElement, deps: Superficie
       const puntos = buildCurvaPuntos(index);
       const escalados = escalarCurva(puntos, ANCHO_SVG, ALTO_SVG);
       const polylinePoints = escalados.map((p) => `${String(p.x)},${String(p.y)}`).join(" ");
+      const hectareasTodas = puntos.map((p) => p.hectareas);
+      const haMin = Math.min(...hectareasTodas);
+      const haMax = Math.max(...hectareasTodas);
+      const anchoTotal = ANCHO_SVG + MARGEN_IZQUIERDO;
+      const altoTotal = ALTO_SVG + MARGEN_INFERIOR;
 
       container.innerHTML = `
         <h2>Superficie afectada</h2>
         <p class="card-subtitulo">Hectáreas que podrían inundarse según la altura del puerto.</p>
-        <svg class="superficie-svg" viewBox="0 0 ${String(ANCHO_SVG)} ${String(ALTO_SVG)}" role="img" aria-label="Curva de hectáreas inundadas según la altura del río">
-          <polyline points="${polylinePoints}" class="superficie-curva-linea" />
-          <circle class="superficie-curva-punto" r="4" cx="0" cy="0" />
+        <svg class="superficie-svg" viewBox="0 0 ${String(anchoTotal)} ${String(altoTotal)}" role="img" aria-label="Curva de hectáreas inundadas según la altura del río">
+          <text class="superficie-eje-etiqueta" x="${String(MARGEN_IZQUIERDO - 4)}" y="9" text-anchor="end">${formatHectareas(haMax)}</text>
+          <text class="superficie-eje-etiqueta" x="${String(MARGEN_IZQUIERDO - 4)}" y="${String(ALTO_SVG)}" text-anchor="end">${formatHectareas(haMin)}</text>
+          <g transform="translate(${String(MARGEN_IZQUIERDO)}, 0)">
+            <polyline points="${polylinePoints}" class="superficie-curva-linea" />
+            <circle class="superficie-curva-punto" r="4" cx="0" cy="0" />
+          </g>
+          <text class="superficie-eje-etiqueta" x="${String(MARGEN_IZQUIERDO)}" y="${String(altoTotal - 2)}" text-anchor="start">${formatAltura(index.nivel_min)}</text>
+          <text class="superficie-eje-etiqueta" x="${String(anchoTotal)}" y="${String(altoTotal - 2)}" text-anchor="end">${formatAltura(index.nivel_max)}</text>
         </svg>
         <input type="range" class="superficie-slider" min="${String(index.nivel_min)}" max="${String(index.nivel_max)}" step="${String(index.paso.hasta_1050)}" value="${String(SELECCION_INICIAL)}" aria-label="Altura del puerto" />
         <p class="superficie-texto"></p>

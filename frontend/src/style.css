@@ -8,6 +8,9 @@
   --warn: #a35d00;
   --error: #b3261e;
   --danger: #7a1014;
+  /* Umbral "Evacuación" (item 6): visiblemente distinto de --error a simple
+     vista, no solo un rojo más oscuro que se confunde con --danger al lado. */
+  --danger-etiqueta: #8a1a63;
   --accent: #1b6ea8;
   --skeleton: #e7eaee;
   color-scheme: light dark;
@@ -31,6 +34,7 @@
     --warn: #f2b84b;
     --error: #f2726b;
     --danger: #ff8a80;
+    --danger-etiqueta: #e39cff;
     --accent: #6fb3e0;
     --skeleton: #232b36;
   }
@@ -118,9 +122,16 @@ body {
     padding: 1.5rem;
   }
 
-  .dashboard > .card--mapa {
+  .dashboard > .card--mapa,
+  .dashboard > .disclaimer-corta--mapa {
     grid-column: 1 / -1;
   }
+}
+
+.disclaimer-corta--mapa {
+  margin-top: -0.25rem;
+  padding: 0 0.25rem;
+  border-top: none;
 }
 
 .card {
@@ -161,6 +172,20 @@ body {
   font-style: italic;
 }
 
+/*
+ * CLAUDE.md §7: el disclaimer tiene que verse en toda pantalla con
+ * pronóstico o mapa, no solo en el pie de página (a ~5.000 px de scroll).
+ * Esta es la versión corta y permanente; el texto largo con links sigue
+ * solo en el pie (pie.ts).
+ */
+.disclaimer-corta {
+  margin: 0.6rem 0 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 /* --- Tarjeta Hoy --- */
 
 .altura-actual {
@@ -199,20 +224,25 @@ body {
   color: var(--danger);
 }
 
+.umbral-distancia {
+  margin: 0 0 0.5rem;
+  color: var(--fg);
+}
+
 .tendencia {
   margin: 0 0 0.5rem;
   color: var(--fg);
 }
 
-.actualizado {
+/*
+ * Spec 007, ítem 4: cuánto tardó en llegar el dato del INA es su operación
+ * normal (CLAUDE.md, "Fuera de alcance"), no un aviso de riesgo del río. Sin
+ * color de alarma a propósito, a diferencia del badge de estado.
+ */
+.medicion {
   margin: 0;
   font-size: 0.85rem;
   color: var(--muted);
-}
-
-.actualizado--viejo {
-  color: var(--warn);
-  font-weight: 600;
 }
 
 /* --- Tarjeta Próximos días --- */
@@ -262,6 +292,16 @@ body {
 
 .dia-mini-flecha {
   text-align: center;
+}
+
+/* Spec 007, ítem 5: la fila de hoy es un valor medido, no un pronóstico. */
+.dia-mini--hoy .dia-mini-fecha {
+  color: var(--fg);
+  font-weight: 700;
+}
+
+.dia-mini--hoy .dia-mini-rango {
+  font-weight: 700;
 }
 
 /* --- Gráfico --- */
@@ -314,15 +354,17 @@ body {
 }
 
 /*
- * `left` y `right` fijos (no solo `right` + ancho intrínseco) para que la
- * caja nunca pueda desbordar el gráfico, pase lo que pase con el cálculo de
- * `top`: el texto se alinea a la derecha y se trunca con "…" en vez de
- * salirse del recorte visible en pantallas angostas.
+ * Spec 007, correcciones de diseño ítem 6: antes `left`+`right` fijos hacían
+ * que el fondo de la etiqueta ocupara TODO el ancho del gráfico a esa altura
+ * ("6,80 m" tapaba el pico real de agosto; "7,90 m" tapaba el tick "8" del
+ * eje Y, a la izquierda). Ahora solo `right` + `max-width`: la caja queda
+ * pegada al borde derecho, lejos del eje, y sigue sin poder desbordar (el
+ * texto largo se trunca con "…" en vez de salirse del recorte).
  */
 .grafico-umbral-etiqueta {
   position: absolute;
-  left: 4px;
   right: 4px;
+  max-width: 55%;
   transform: translateY(-50%);
   padding: 1px 5px;
   font-size: 0.68rem;
@@ -417,6 +459,26 @@ body {
   font-size: 0.78rem;
 }
 
+/* Leyenda breve de las bandas/puntos del gráfico (ítem 9, correcciones de diseño). */
+.historial-leyenda-muestra {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.7rem;
+  vertical-align: -0.1rem;
+}
+
+.historial-leyenda-muestra--banda {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  border-radius: 2px;
+}
+
+.historial-leyenda-muestra--punto {
+  border-radius: 50%;
+  background: var(--fg);
+  border: 2px solid var(--card-bg);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
 /* --- ¿Cuánto acierta el pronóstico? (T4) --- */
 
 .precision-frase {
@@ -495,6 +557,12 @@ body {
   fill: var(--accent);
   stroke: var(--card-bg);
   stroke-width: 2;
+}
+
+/* Rótulos de eje (ítem 9, correcciones de diseño): metros abajo, hectáreas al costado. */
+.superficie-eje-etiqueta {
+  font-size: 8px;
+  fill: var(--muted);
 }
 
 .superficie-slider {
@@ -579,8 +647,46 @@ body {
   }
 }
 
+/*
+ * Spec 007, correcciones de diseño ítem 3: siempre visible (nunca dentro del
+ * `<details>` plegable), para que la altura del escenario, la de hoy y la
+ * leyenda de profundidad se vean sin abrir nada. Sin esto, alguien podía ver
+ * agua sobre su barrio en mobile (panel plegado por defecto) y no tener
+ * forma de saber a qué altura corresponde ni si es la situación de hoy.
+ */
+.mapa-inundacion-resumen-wrap {
+  border-top: 1px solid var(--border);
+}
+
+.mapa-inundacion-resumen {
+  padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.mapa-inundacion-mostrando {
+  margin: 0;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--fg);
+}
+
 .mapa-inundacion-panel-wrap {
   border-top: 1px solid var(--border);
+}
+
+/* Rótulo permanente del hidrómetro (ítem 9): mismas reglas de superficie clara
+   que el resto de los controles fijos sobre las teselas (ver más abajo). */
+.hidrometro-tooltip {
+  --fg: #1c2430;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.92);
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
 }
 
 .map-placeholder {

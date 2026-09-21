@@ -294,6 +294,13 @@ export interface VistaMapa {
     hectareas: string;
     mostrando: string | null;
     fueraDeRango: string | null;
+    /**
+     * Altura real medida hoy, formateada (o null hasta que llegue). Spec
+     * 007, correcciones de diseño ítem 3: el resumen siempre visible del
+     * mapa ("Mostrando: ... — hoy está en ...") la necesita fuera del panel
+     * colapsable.
+     */
+    actual: string | null;
   };
 }
 
@@ -346,6 +353,7 @@ export function createEstadoMapa(index: CapaIndex): EstadoMapa {
         hectareas: formatHectareas(resuelto.entry.hectareas),
         mostrando: resuelto.redondeado ? textoMostrando(resuelto.mostrado, seleccion) : null,
         fueraDeRango: resuelto.fueraDeRango === "arriba" ? avisoFueraDeRango(index) : null,
+        actual: nivelActual === null ? null : formatAltura(nivelActual),
       },
     };
   }

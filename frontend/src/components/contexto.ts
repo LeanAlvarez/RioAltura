@@ -1,6 +1,7 @@
 import type { FetchResult } from "../api/client";
 import { getEstadisticas } from "../api/estadisticas";
 import type { Estadisticas, MismoDiaAnio } from "../api/types";
+import { EVACUACION_EN_SECO_M, RANGO_ESTIMACION_M } from "../domain/dominio";
 import { formatMetros } from "../format";
 import { renderCardError, renderCardSkeleton } from "./card";
 
@@ -22,12 +23,19 @@ export type ContextoView =
       hoy: ComparacionAnioView | null;
     };
 
-const enteroFormatter = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 0 });
-
-/** "8 de cada 10 días del último año" — traducción a lenguaje llano del percentil (siempre entero, nunca decimales). */
-function describePercentil(percentil: number): string {
-  const redondeado = Math.round(percentil);
-  return `Hoy el río está más alto que el ${enteroFormatter.format(redondeado)} % de los días del último año.`;
+/**
+ * "En el último año, 8 de cada 10 días el río estuvo más bajo que hoy" —
+ * traducción a lenguaje llano del percentil (ítem 8, correcciones de diseño:
+ * "más alto que el 83 %" es jerga estadística). Agrega la coletilla que
+ * concilia la tensión con el badge "Normal" (ítem 9) solo cuando la altura
+ * de hoy está realmente lejos del primer umbral — nunca inventa "lejos"
+ * cuando no lo está.
+ */
+function describePercentil(percentil: number, hoyAltura: number): string {
+  const octavos = Math.max(0, Math.min(10, Math.round(percentil / 10)));
+  const base = `En el último año, ${String(octavos)} de cada 10 días el río estuvo más bajo que hoy.`;
+  const lejosDeCualquierAlerta = EVACUACION_EN_SECO_M - hoyAltura >= RANGO_ESTIMACION_M;
+  return lejosDeCualquierAlerta ? `${base} Igual, sigue lejos de cualquier alerta.` : base;
 }
 
 /** Pure: normaliza alturas a un [0,100] relativo para barras horizontales, sin depender del DOM. */
@@ -47,7 +55,9 @@ export function deriveContextoView(state: ContextoState): ContextoView {
   if (state.kind !== "ok") return { kind: "error" };
 
   const { data } = state;
-  const fraseAmpliada = data.percentil_hoy ? describePercentil(data.percentil_hoy.percentil) : null;
+  const fraseAmpliada = data.percentil_hoy
+    ? describePercentil(data.percentil_hoy.percentil, data.percentil_hoy.altura_m)
+    : null;
   const hoyAltura = data.percentil_hoy?.altura_m ?? null;
   const comparaciones = construirComparaciones(data.mismo_dia_otros_anios, hoyAltura);
 

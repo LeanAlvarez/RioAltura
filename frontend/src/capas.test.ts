@@ -256,16 +256,22 @@ describe("createEstadoMapa", () => {
     const estado = createEstadoMapa(index);
     const vistas: Array<ReturnType<typeof estado.escenarios>> = [];
     let seleccionActual = 0;
+    let ultimaVista: VistaMapa | undefined;
     estado.subscribe((v) => {
       vistas.push(v.escenarios);
       seleccionActual = v.seleccion;
+      ultimaVista = v;
     });
 
+    expect(ultimaVista?.textos.actual).toBeNull();
     expect(seleccionActual).toBe(SELECCION_INICIAL);
     estado.setNivelActual(5.1);
     expect(seleccionActual).toBe(SELECCION_INICIAL);
     const hoy = vistas.at(-1)?.find((e) => e.id === "hoy");
     expect(hoy).toEqual({ id: "hoy", etiqueta: "Hoy", h: 5.1, habilitado: true });
+    // ítem 3 (correcciones de diseño 007): el resumen siempre visible del
+    // mapa necesita la altura de hoy formateada, no solo el escenario.
+    expect(ultimaVista?.textos.actual).toBe("5,10 m");
   });
 
   it("escenarios mantiene el orden fijo y arranca con hoy/pronóstico deshabilitados", () => {

@@ -8,14 +8,14 @@ function fakeContainer(): HTMLElement {
 describe("mountMapa", () => {
   it("degrada con un placeholder cuando el módulo no existe (import falla)", async () => {
     const container = fakeContainer();
-    await mountMapa(container, 5.5, () => Promise.reject(new Error("no module")));
+    await mountMapa(container, 5.5, null, () => Promise.reject(new Error("no module")));
     expect(container.innerHTML).toContain("mapa de inundación");
   });
 
   it("degrada con un placeholder cuando el módulo no expone createMap", async () => {
     const container = fakeContainer();
     const mod: MapModule = {};
-    await mountMapa(container, 5.5, () => Promise.resolve(mod));
+    await mountMapa(container, 5.5, null, () => Promise.resolve(mod));
     expect(container.innerHTML).toContain("mapa de inundación");
   });
 
@@ -23,7 +23,7 @@ describe("mountMapa", () => {
     const container = fakeContainer();
     const createMap = vi.fn();
     const mod: MapModule = { createMap };
-    await mountMapa(container, 5.5, () => Promise.resolve(mod));
+    await mountMapa(container, 5.5, null, () => Promise.resolve(mod));
     expect(createMap).toHaveBeenCalledWith(container);
     expect(container.innerHTML).toBe("");
   });
@@ -33,7 +33,7 @@ describe("mountMapa", () => {
     const createMap = vi.fn();
     const setNivelPronosticado = vi.fn();
     const mod: MapModule = { createMap, setNivelPronosticado };
-    await mountMapa(container, 6.5, () => Promise.resolve(mod));
+    await mountMapa(container, 6.5, null, () => Promise.resolve(mod));
     expect(createMap).toHaveBeenCalledWith(container);
     expect(setNivelPronosticado).toHaveBeenCalledWith(6.5);
   });
@@ -42,7 +42,7 @@ describe("mountMapa", () => {
     const container = fakeContainer();
     const setNivelPronosticado = vi.fn();
     const mod: MapModule = { createMap: vi.fn(), setNivelPronosticado };
-    await mountMapa(container, null, () => Promise.resolve(mod));
+    await mountMapa(container, null, null, () => Promise.resolve(mod));
     expect(setNivelPronosticado).not.toHaveBeenCalled();
   });
 
@@ -54,6 +54,34 @@ describe("mountMapa", () => {
         throw new Error("boom");
       },
     };
-    await expect(mountMapa(container, 5.5, () => Promise.resolve(mod))).resolves.toBeUndefined();
+    await expect(mountMapa(container, 5.5, null, () => Promise.resolve(mod))).resolves.toBeUndefined();
+  });
+
+  it("monta el mapa y llama setNivelActual con la altura real de hoy cuando existe (ítem 3)", async () => {
+    const container = fakeContainer();
+    const createMap = vi.fn();
+    const setNivelActual = vi.fn();
+    const mod: MapModule = { createMap, setNivelActual };
+    await mountMapa(container, null, 4.29, () => Promise.resolve(mod));
+    expect(setNivelActual).toHaveBeenCalledWith(4.29);
+  });
+
+  it("no llama setNivelActual cuando no hay altura real de hoy (null)", async () => {
+    const container = fakeContainer();
+    const setNivelActual = vi.fn();
+    const mod: MapModule = { createMap: vi.fn(), setNivelActual };
+    await mountMapa(container, null, null, () => Promise.resolve(mod));
+    expect(setNivelActual).not.toHaveBeenCalled();
+  });
+
+  it("no rompe si setNivelActual tira una excepción", async () => {
+    const container = fakeContainer();
+    const mod: MapModule = {
+      createMap: vi.fn(),
+      setNivelActual: () => {
+        throw new Error("boom");
+      },
+    };
+    await expect(mountMapa(container, null, 4.29, () => Promise.resolve(mod))).resolves.toBeUndefined();
   });
 });

@@ -6,6 +6,7 @@ import {
   formatDiaSemanaFecha,
   formatHaceTiempo,
   formatMetros,
+  formatMomentoMedicion,
   formatRangoMetros,
   formatTendencia,
   horasDesde,
@@ -94,5 +95,25 @@ describe("horasDesde", () => {
     const ahora = new Date("2026-09-21T15:00:00Z");
     expect(horasDesde(new Date("2026-09-21T09:00:00Z"), ahora)).toBe(6);
     expect(horasDesde(new Date("2026-09-21T16:00:00Z"), ahora)).toBe(0);
+  });
+});
+
+describe("formatMomentoMedicion", () => {
+  it("dice 'hoy' cuando la fecha cae el mismo día calendario", () => {
+    const ahora = new Date(2026, 8, 21, 15, 0);
+    const fecha = new Date(2026, 8, 21, 0, 0);
+    expect(formatMomentoMedicion(fecha, ahora)).toBe("hoy a las 00:00");
+  });
+
+  it("dice 'ayer' cuando la fecha cae el día calendario anterior", () => {
+    const ahora = new Date(2026, 8, 21, 15, 0);
+    const fecha = new Date(2026, 8, 20, 23, 0);
+    expect(formatMomentoMedicion(fecha, ahora)).toBe("ayer a las 23:00");
+  });
+
+  it("da fecha corta cuando es más antiguo que ayer", () => {
+    const ahora = new Date(2026, 8, 21, 15, 0);
+    const fecha = new Date(2026, 8, 19, 10, 0);
+    expect(formatMomentoMedicion(fecha, ahora)).toBe("el 19/9 a las 10:00");
   });
 });

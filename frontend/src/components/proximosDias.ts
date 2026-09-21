@@ -1,17 +1,34 @@
 import type { FetchResult } from "../api/client";
-import type { DiaPronostico, Pronostico } from "../api/types";
+import type { DiaPronostico, NivelAviso, Pronostico } from "../api/types";
 import { describeAnclaje } from "../domain/anclaje";
 import { describeAviso } from "../domain/aviso";
-import { calcularTendencia, formatDiaCorto, formatDiaSemanaFecha, formatRangoMetros, type Tendencia } from "../format";
+import {
+  calcularTendencia,
+  formatDiaCorto,
+  formatDiaSemanaFecha,
+  formatMetros,
+  formatRangoMetros,
+  type Tendencia,
+} from "../format";
 import { renderCardError, renderCardSkeleton } from "./card";
 
 export type ProximosDiasState = { kind: "loading" } | FetchResult<Pronostico>;
 
 export interface DiaMiniView {
   dia: string;
-  rango: string;
+  /** Rango anclado, o null para la fila de hoy (spec 007, ítem 5: hoy se mide, no se pronostica). */
+  rango: string | null;
+  /** Solo en la fila de hoy: la altura anclada de hoy, que es ~igual a la real medida (C2). */
+  medido: string | null;
   tendencia: Tendencia | null;
   extrapolado: boolean;
+}
+
+function fechaISOLocal(fecha: Date): string {
+  const y = fecha.getFullYear();
+  const m = String(fecha.getMonth() + 1).padStart(2, "0");
+  const d = String(fecha.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 export type ProximosDiasView =
@@ -21,6 +38,7 @@ export type ProximosDiasView =
   | {
       kind: "ready";
       avisoLabel: string;
+      nivelAviso: NivelAviso;
       frase: string;
       fraseExtrapolada: boolean;
       anclajeTexto: string | null;
@@ -38,21 +56,30 @@ function elegirDiaMaximo(dias: readonly DiaPronostico[]): DiaPronostico | undefi
   );
 }
 
-function construirDiasMini(dias: readonly DiaPronostico[]): DiaMiniView[] {
+function construirDiasMini(dias: readonly DiaPronostico[], hoyIso: string): DiaMiniView[] {
   return dias.map((dia, index) => {
     const anterior = dias[index - 1];
     const delta = anterior ? dia.altura_anclada_m - anterior.altura_anclada_m : null;
+    // C3 filtra por `fecha` (zona America/Argentina/Buenos_Aires), no por
+    // `lead_dias`: cuando la última emisión de Google es de ayer, el día de
+    // hoy sobrevive con `lead_dias 1` (el de `lead_dias 0` cae ayer y queda
+    // filtrado) — comparar por `lead_dias === 0` detectaba mal "hoy" en ese
+    // caso real (visto al verificar contra la API real). Spec 007 ítem 5:
+    // mostrar el valor medido en vez de rango — la altura anclada de hoy es
+    // ~igual a la real (C2).
+    const esHoy = dia.fecha === hoyIso;
     return {
-      dia: formatDiaCorto(dia.fecha),
-      rango: formatRangoMetros(dia.altura_anclada_min_m, dia.altura_anclada_max_m),
+      dia: esHoy ? "Hoy" : formatDiaCorto(dia.fecha),
+      rango: esHoy ? null : formatRangoMetros(dia.altura_anclada_min_m, dia.altura_anclada_max_m),
+      medido: esHoy ? formatMetros(dia.altura_anclada_m) : null,
       tendencia: calcularTendencia(delta),
       extrapolado: dia.extrapolado,
     };
   });
 }
 
-/** Pure derivation: state -> what the card should show. Never a bare number, always a range. No DOM. */
-export function deriveProximosDiasView(state: ProximosDiasState): ProximosDiasView {
+/** Pure derivation: state -> what the card should show. Never a bare number for a forecast day, always a range. No DOM. */
+export function deriveProximosDiasView(state: ProximosDiasState, ahora: Date): ProximosDiasView {
   if (state.kind === "loading") return { kind: "loading" };
   if (state.kind === "unavailable") return { kind: "unavailable" };
   if (state.kind !== "ok") return { kind: "error" };
@@ -68,10 +95,11 @@ export function deriveProximosDiasView(state: ProximosDiasState): ProximosDiasVi
   return {
     kind: "ready",
     avisoLabel: describeAviso(data.aviso.nivel),
+    nivelAviso: data.aviso.nivel,
     frase,
     fraseExtrapolada: diaMaximo?.extrapolado ?? false,
     anclajeTexto: describeAnclaje(data.anclaje),
-    dias: construirDiasMini(data.dias),
+    dias: construirDiasMini(data.dias, fechaISOLocal(ahora)),
     hayExtrapolados: data.dias.some((d) => d.extrapolado),
   };
 }
@@ -79,6 +107,8 @@ export function deriveProximosDiasView(state: ProximosDiasState): ProximosDiasVi
 const TITULO = "Próximos días";
 const FLECHAS: Record<Tendencia, string> = { sube: "▲", baja: "▼", estable: "→" };
 const FLECHAS_ALT: Record<Tendencia, string> = { sube: "sube", baja: "baja", estable: "estable" };
+/** CLAUDE.md §7: visible en toda pantalla con pronóstico, no solo en el pie. */
+const DISCLAIMER_CORTO = "Orientativo. No reemplaza a Prefectura ni a Defensa Civil.";
 
 export function renderProximosDias(container: HTMLElement, view: ProximosDiasView): void {
   if (view.kind === "loading") {
@@ -89,6 +119,7 @@ export function renderProximosDias(container: HTMLElement, view: ProximosDiasVie
     container.innerHTML = `
       <h2>${TITULO}</h2>
       <p class="card-info" role="status">Pronóstico no disponible por el momento.</p>
+      <p class="disclaimer-corta">${DISCLAIMER_CORTO}</p>
     `;
     return;
   }
@@ -104,24 +135,32 @@ export function renderProximosDias(container: HTMLElement, view: ProximosDiasVie
       const caveat = dia.extrapolado
         ? ` <span class="caveat" title="Estimación menos confiable: el río podría estar más alto de lo que podemos calcular con precisión">*</span>`
         : "";
+      const valor = dia.medido ? `${dia.medido} medido` : dia.rango;
       return `
-        <li>
+        <li${dia.medido ? ' class="dia-mini--hoy"' : ""}>
           <span class="dia-mini-fecha">${dia.dia}</span>
           <span class="dia-mini-flecha" aria-label="Tendencia: ${flechaAlt}">${flecha}</span>
-          <span class="dia-mini-rango">${dia.rango}${caveat}</span>
+          <span class="dia-mini-rango">${valor}${caveat}</span>
         </li>
       `;
     })
     .join("");
 
+  // Ítem 8/9: "Sin aviso" duplicaba el vocabulario del badge "Normal" de la
+  // tarjeta "Hoy"; cuando no hay aviso se dice en una frase llana en vez de
+  // repetir la etiqueta técnica del nivel.
+  const avisoTexto =
+    view.nivelAviso === "sin_aviso" ? "Hoy no hay alerta." : `Nivel de aviso: <strong>${view.avisoLabel}</strong>.`;
+
   container.innerHTML = `
     <h2>${TITULO}</h2>
-    <p class="aviso-nivel">Nivel de aviso: <strong>${view.avisoLabel}</strong></p>
+    <p class="aviso-nivel">${avisoTexto}</p>
     <p class="frase-pronostico">
       ${view.frase}${view.fraseExtrapolada ? ' <span class="caveat">Este día el pronóstico es menos confiable: el río podría estar más alto de lo que podemos calcular con precisión.</span>' : ""}
     </p>
     ${view.anclajeTexto ? `<p class="anclaje-nota">${view.anclajeTexto}</p>` : ""}
     <ul class="dias-mini">${itemsMini}</ul>
     ${view.hayExtrapolados ? '<p class="caveat-nota">* Estimación menos confiable: el río podría estar más alto de lo que podemos calcular con precisión.</p>' : ""}
+    <p class="disclaimer-corta">${DISCLAIMER_CORTO}</p>
   `;
 }
