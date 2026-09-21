@@ -370,8 +370,24 @@ body {
 
 /* --- Mapa de inundación --- */
 
-.map {
-  position: relative;
+/*
+ * The map overlays (panel, notices, errors) keep a light surface in both
+ * themes, like Leaflet's own controls, because they sit on satellite tiles.
+ * They must therefore pin the light text tokens: inheriting the themed ones
+ * paints near-white text on a near-white panel under `prefers-color-scheme:
+ * dark`. Redefining the custom properties here also fixes every descendant
+ * that reads them.
+ */
+.capas-panel,
+.capas-aviso-modelo,
+.capas-fuera-rango,
+.capas-error,
+.leaflet-container .leaflet-control-attribution {
+  --fg: #1c2430;
+  --muted: #5b6573;
+  --error: #b3261e;
+  --aviso: #a35d00;
+  color: var(--fg);
 }
 
 .capas-aviso-modelo {
@@ -528,6 +544,27 @@ body {
   margin: 0;
   font-size: 0.7rem;
   color: var(--muted);
+}
+
+@media (max-width: 767px) {
+  /*
+   * Below 768px the panel is a bottom sheet, and Leaflet anchors its
+   * attribution to the same bottom edge — so the two texts overlap and both
+   * become unreadable. Lift the attribution above the sheet and reserve room
+   * for it, instead of hiding a credit we are required to show.
+   */
+  /*
+   * Leaflet gives `.leaflet-bottom` its own stacking context, so raising the
+   * attribution itself does nothing against the panel — the positioned
+   * ancestor is what competes with it.
+   */
+  .leaflet-container .leaflet-control-container .leaflet-bottom {
+    z-index: 1001;
+  }
+
+  .capas-panel {
+    padding-bottom: calc(2.6rem + env(safe-area-inset-bottom));
+  }
 }
 
 @media (min-width: 768px) {
