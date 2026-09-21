@@ -32,6 +32,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
+        with:
+          # The action reads package.json from the repo root by default;
+          # ours lives in frontend/ (working-directory does not apply to actions).
+          package_json_file: frontend/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 20
