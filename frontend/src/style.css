@@ -380,6 +380,32 @@ body {
 }
 
 /*
+ * Línea guía entre un tick y su etiqueta cuando quedaron separados (defecto
+ * G1, revisión de diseño): sin esto, una etiqueta desplazada no tenía forma
+ * de saber a qué marca correspondía. `preserveAspectRatio="none"` porque el
+ * viewBox es 100x100 pero el elemento real es angosto (9rem) y alto (>=
+ * 12rem): las líneas son solo una referencia visual, no tienen que ser
+ * geométricamente exactas.
+ */
+.regla-guias {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.regla-marca-guia {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 2, 2;
+}
+
+.regla-marca-guia.regla-marca--hoy {
+  stroke: var(--accent);
+}
+
+/*
  * Tick y texto son elementos independientes (ver `reglaHidrometrica.ts`): el
  * tick siempre a la altura exacta a escala (`posicionPct`); el texto en la
  * posición ya separada para no superponerse (`etiquetaPosicionPct`).
@@ -601,9 +627,24 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: color-mix(in srgb, var(--card-bg) 85%, transparent);
+  /*
+   * Opaco, no traslúcido (menor, revisión de diseño a 768 px): a 85 % la
+   * línea de "Altura real" se seguía viendo *a través* de la etiqueta
+   * cuando pasaba cerca de un umbral ("la etiqueta pisa la curva"). El
+   * texto siempre arranca con el número (ver `grafico.ts`), así que si el
+   * ancho angosto de mobile corta algo, corta el nombre, nunca el dato.
+   */
+  background: var(--card-bg);
+  border: 1px solid var(--border);
   border-radius: 3px;
   pointer-events: none;
+}
+
+@media (max-width: 480px) {
+  .grafico-umbral-etiqueta {
+    max-width: 62%;
+    font-size: 0.64rem;
+  }
 }
 
 .grafico-tooltip {
@@ -780,10 +821,36 @@ body {
 
 /* --- Superficie afectada (T7) --- */
 
+/*
+ * "Superficie afectada" comparte fila con el mapa a >= 1280 px (el mapa
+ * fuerza 70vh), y `.dashboard{align-items:stretch}` estira la tarjeta a esa
+ * misma altura: sin esto quedaban ~270-320 px vacíos abajo de la curva
+ * (blanco grande, revisión de diseño). `flex-direction:column` acá y
+ * `flex:1` en el SVG hace que el gráfico crezca para ocupar ese alto extra
+ * cuando existe (a los demás anchos, sin altura extra que repartir, el SVG
+ * se queda en su `min-height`, igual que antes).
+ */
+#tarjeta-superficie {
+  display: flex;
+  flex-direction: column;
+}
+
 .superficie-svg {
   width: 100%;
-  height: auto;
+  flex: 1 1 0;
+  min-height: 120px;
   margin: 0.5rem 0;
+}
+
+.superficie-curva-maximo-linea {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3, 3;
+}
+
+.superficie-curva-maximo-etiqueta {
+  font-size: 11px;
+  fill: var(--muted);
 }
 
 .superficie-curva-linea {
@@ -842,9 +909,42 @@ body {
   min-height: 44px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   font-weight: 600;
   font-size: 0.95rem;
   color: var(--fg);
+}
+
+/*
+ * Chevron visible (defecto G4, revisión de diseño): `display:flex` en
+ * `<summary>` ya elimina el triángulo nativo del navegador, así que sin esto
+ * no quedaba ninguna señal de que la pregunta se puede tocar. Rota al abrir.
+ */
+.faq-pregunta::after,
+.detalle-tecnico summary::after,
+.capas-panel-resumen::after {
+  content: "▾";
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.faq-item[open] > .faq-pregunta::after,
+.detalle-tecnico[open] > summary::after,
+.capas-panel[open] > .capas-panel-resumen::after {
+  transform: rotate(180deg);
+}
+
+/* A dos columnas en pantallas anchas (blancos grandes, revisión de diseño):
+   a 1920 px, 11 preguntas cortas en una sola columna dejaban barras de casi
+   1820 px de ancho para renglones de pocas palabras. */
+@media (min-width: 1280px) {
+  .faq-lista {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem 1rem;
+  }
 }
 
 .faq-respuesta {
@@ -869,6 +969,8 @@ body {
   min-height: 44px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
@@ -1143,6 +1245,8 @@ body {
   min-height: 44px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.6rem 0.75rem;
   font-weight: 600;
   font-size: 0.9rem;
@@ -1218,11 +1322,41 @@ body {
   background: linear-gradient(to right, transparent, var(--card-bg));
 }
 
+/*
+ * Flecha sobre el degradé (menor, revisión de diseño): el degradé solo
+ * ("::after" de arriba) se funde con el propio fondo `--card-bg` de los
+ * chips que queden debajo y termina siendo invisible ahí — el indicador
+ * "hay más para el lado" no se notaba. `map.ts` agrega/saca esta clase según
+ * el scroll (`capas-escenarios--fin` cuando ya no hay más para la derecha).
+ */
+.capas-escenarios::before {
+  content: "›";
+  position: absolute;
+  top: 0;
+  bottom: 0.15rem;
+  right: 4px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.capas-escenarios--fin::before,
+.capas-escenarios--fin::after {
+  display: none;
+}
+
 .capas-escenario {
   flex: 0 0 auto;
   scroll-snap-align: start;
-  /* M1: blanco de toque >= 44 px. */
+  /* M1: blanco de toque >= 44 px; ancho mínimo para que un texto corto
+     ("Hoy") no quede tan angosto como alto y se lea como un punto en vez de
+     una píldora (menor, revisión de diseño). */
   min-height: 44px;
+  min-width: 3.5rem;
   padding: 0.4rem 0.65rem;
   border: 1px solid var(--border);
   border-radius: 999px;
