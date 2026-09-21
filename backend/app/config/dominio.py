@@ -75,3 +75,42 @@ def altura_estimada(caudal_m3s: float) -> float:
 def es_extrapolado(caudal_m3s: float) -> bool:
     """Whether `caudal_m3s` is above the calibrated range of the rating curve."""
     return caudal_m3s > CAUDAL_MAX_CALIBRADO_M3S
+
+
+# --- Forecast anchoring (spec 007, criterion C2) ---
+#
+# This is a PRESENTATION correction applied on top of the rating curve
+# output, never a recalibration of the curve itself: it only shifts how an
+# already-computed `altura_est_m` is shown, translating the whole band by a
+# fading fraction of today's observed bias. It never touches `caudal_m3s`
+# nor the aviso, which keep being computed from discharge (CLAUDE.md §5).
+
+# Days over which today's bias between the real reading and the forecast
+# estimate is linearly faded out. Day 0 (today) gets the full bias; day
+# HORIZONTE_ANCLAJE_DIAS and beyond get none.
+HORIZONTE_ANCLAJE_DIAS = 7
+
+
+def factor_anclaje(dias_desde_hoy: int) -> float:
+    """Decay factor (1.0 to 0.0) for the forecast anchoring bias.
+
+    1.0 at `dias_desde_hoy == 0` (today), decaying linearly to 0.0 at
+    `HORIZONTE_ANCLAJE_DIAS` and staying at 0.0 beyond it. A negative
+    `dias_desde_hoy` (a day before today) also yields 0.0: anchoring only
+    ever applies to today and future days.
+    """
+    if dias_desde_hoy < 0:
+        return 0.0
+    return max(0.0, 1 - dias_desde_hoy / HORIZONTE_ANCLAJE_DIAS)
+
+
+def aplicar_anclaje(altura_m: float, sesgo_m: float, dias_desde_hoy: int) -> float:
+    """Shift `altura_m` towards today's observed bias `sesgo_m`.
+
+    Presentation-only correction (see module docstring above and
+    `factor_anclaje`): translates the value by a fading fraction of the
+    bias, never widening it. Meant to be applied identically to
+    `altura_est_m`, `altura_min_m` and `altura_max_m` so the whole band
+    moves together.
+    """
+    return altura_m + sesgo_m * factor_anclaje(dias_desde_hoy)
