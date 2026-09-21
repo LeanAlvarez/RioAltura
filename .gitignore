@@ -1,0 +1,24 @@
+# Entorno local (una copia por worktree)
+.env*
+!.env.example
+
+# Datos pesados del DEM y salidas intermedias
+geoprocessing/data/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Herramientas de agentes (locales, no versionadas)
+odd/
+.atl/
+
+# SO / editores
+.DS_Store

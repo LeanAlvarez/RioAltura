@@ -1,0 +1,40 @@
+[project]
+name = "rioaltura"
+version = "0.1.0"
+description = "Río Uruguay en Colón: estado, pronóstico, mapa de inundación y alertas"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "backend",
+    "worker",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["backend", "worker"]
+
+[tool.uv.sources]
+backend = { workspace = true }
+worker = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["frontend", "geoprocessing/data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "W"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests", "worker/tests", "scripts/tests"]
+addopts = "--import-mode=importlib -m 'not live'"
+markers = [
+    "live: tests que llaman a servicios reales (no corren en CI)",
+]
