@@ -20,7 +20,7 @@ app.innerHTML = `
     </p>
     <p class="attribution">
       Datos: Google Flood Forecasting (CC BY 4.0), Copernicus DEM, INA.
-      Mapa: &copy; OpenStreetMap / CARTO, Esri.
+      Mapa: &copy; OpenStreetMap contributors, &copy; Esri.
     </p>
   </footer>
 `;
