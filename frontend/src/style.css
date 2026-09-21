@@ -1,13 +1,35 @@
 :root {
   --bg: #f6f7f9;
+  --card-bg: #ffffff;
   --fg: #1c2430;
   --muted: #5b6573;
+  --border: #e1e5ea;
   --ok: #1b7f3b;
   --warn: #a35d00;
   --error: #b3261e;
+  --danger: #7a1014;
+  --accent: #1b6ea8;
+  --skeleton: #e7eaee;
+  color-scheme: light dark;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--fg);
   background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12161c;
+    --card-bg: #1a2029;
+    --fg: #e7ebf0;
+    --muted: #9aa4b2;
+    --border: #2a323d;
+    --ok: #4ade80;
+    --warn: #f2b84b;
+    --error: #f2726b;
+    --danger: #ff8a80;
+    --accent: #6fb3e0;
+    --skeleton: #232b36;
+  }
 }
 
 * {
@@ -19,6 +41,8 @@ body {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
 }
 
 #app {
@@ -35,8 +59,8 @@ body {
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
-  background: #fff;
-  border-bottom: 1px solid #e1e5ea;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border);
 }
 
 .topbar h1 {
@@ -47,7 +71,7 @@ body {
 .health {
   display: flex;
   flex-direction: column;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   color: var(--muted);
 }
 
@@ -67,17 +91,263 @@ body {
   content: "● ";
 }
 
-.map {
+.dashboard {
   flex: 1;
-  min-height: 60dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
 }
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+
+.card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.card-error {
+  color: var(--error);
+  font-weight: 600;
+}
+
+.card-info {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* --- Tarjeta Hoy --- */
+
+.altura-actual {
+  font-size: 2.75rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+  line-height: 1;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin: 0 0 0.5rem;
+}
+
+.badge[data-tono="ok"] {
+  background: color-mix(in srgb, var(--ok) 18%, transparent);
+  color: var(--ok);
+}
+
+.badge[data-tono="warn"] {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: var(--warn);
+}
+
+.badge[data-tono="error"] {
+  background: color-mix(in srgb, var(--error) 18%, transparent);
+  color: var(--error);
+}
+
+.badge[data-tono="danger"] {
+  background: color-mix(in srgb, var(--danger) 22%, transparent);
+  color: var(--danger);
+}
+
+.tendencia {
+  margin: 0 0 0.5rem;
+  color: var(--fg);
+}
+
+.actualizado {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.actualizado--viejo {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+/* --- Tarjeta Próximos días --- */
+
+.aviso-nivel {
+  margin: 0 0 0.5rem;
+}
+
+.frase-pronostico {
+  margin: 0 0 0.75rem;
+}
+
+.caveat {
+  color: var(--warn);
+  font-size: 0.85rem;
+}
+
+.caveat-nota {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0.5rem 0 0;
+}
+
+.dias-mini {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.dias-mini li {
+  display: grid;
+  grid-template-columns: 3.5rem 1.5rem 1fr;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.35rem;
+}
+
+.dia-mini-fecha {
+  text-transform: capitalize;
+  color: var(--muted);
+}
+
+.dia-mini-flecha {
+  text-align: center;
+}
+
+/* --- Gráfico --- */
+
+.grafico-controles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.rango-selector {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.rango-selector button {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  border-radius: 0.4rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.rango-selector button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.toggle-historico {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.grafico-canvas {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.grafico-estado {
+  min-height: 1.2em;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.grafico-alternativa {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.grafico-resumen {
+  margin: 0.35rem 0 0;
+}
+
+/* --- Mapa --- */
+
+.card--mapa {
+  min-height: 60dvh;
+  padding: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.map-placeholder {
+  margin: 0;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* --- Skeletons --- */
+
+.skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.skeleton-line {
+  height: 1rem;
+  border-radius: 0.3rem;
+  background: var(--skeleton);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+
+.skeleton-line--wide {
+  height: 2.5rem;
+  width: 60%;
+}
+
+.skeleton-line--short {
+  width: 40%;
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* --- Pie --- */
 
 .footer {
   padding: 0.75rem 1rem;
   font-size: 0.8rem;
   color: var(--muted);
-  background: #fff;
-  border-top: 1px solid #e1e5ea;
+  background: var(--card-bg);
+  border-top: 1px solid var(--border);
 }
 
 .footer p {
@@ -86,4 +356,10 @@ body {
 
 .footer a {
   color: inherit;
+}
+
+@media (min-width: 720px) {
+  .dashboard {
+    padding: 1.5rem;
+  }
 }
