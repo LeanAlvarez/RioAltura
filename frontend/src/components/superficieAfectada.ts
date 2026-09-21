@@ -16,6 +16,18 @@ export interface PuntoSvg {
 }
 
 /**
+ * Pure: posición X (en el mismo espacio de `escalarCurva`, `[0, width]`) que
+ * le corresponde a una altura `h` dentro del rango `[hMin, hMax]` de la
+ * curva. Se usa para ubicar la marca de "máximo observado" (G5) en el mismo
+ * eje que los puntos de la curva, sin ser necesariamente uno de ellos. No
+ * DOM.
+ */
+export function xParaAltura(h: number, hMin: number, hMax: number, width: number): number {
+  const rango = hMax - hMin || 1;
+  return ((h - hMin) / rango) * width;
+}
+
+/**
  * Pure: escala los puntos (h, hectáreas) a coordenadas SVG (`width`x`height`),
  * con y invertido (más hectáreas = más arriba). No DOM.
  */
@@ -96,7 +108,7 @@ const MARGEN_INFERIOR = 22;
  */
 export function mountSuperficieAfectada(container: HTMLElement, deps: SuperficieAfectadaDeps = defaultDeps): void {
   container.innerHTML = `
-    <h2>Superficie afectada</h2>
+    <h2>Cuánta tierra se tapa de agua</h2>
     <p class="superficie-estado" role="status" aria-live="polite">Cargando…</p>
   `;
   const estadoEl = container.querySelector<HTMLParagraphElement>(".superficie-estado");
@@ -114,12 +126,37 @@ export function mountSuperficieAfectada(container: HTMLElement, deps: Superficie
       const anchoTotal = ANCHO_SVG + MARGEN_IZQUIERDO;
       const altoTotal = ALTO_SVG + MARGEN_INFERIOR;
 
+      // G5 (revisión de diseño): sin esto, la curva mostraba 26.094 ha a 20 m
+      // como si fuera un valor tan creíble como cualquier otro, sin ninguna
+      // marca de que el río nunca pasó de 10 m (CLAUDE.md §5, "escenario
+      // hipotético"). El valor sale de `index.json` (nunca hardcodeado); si
+      // el índice todavía no lo trae (contrato opcional, ver `capas.ts`) o
+      // cae fuera del rango simulado, no se dibuja nada.
+      const hs = puntos.map((p) => p.h);
+      const hMin = Math.min(...hs);
+      const hMax = Math.max(...hs);
+      const maximoObservadoM = index.crecida_maxima_observada_m;
+      const marcaMaximoHtml =
+        maximoObservadoM !== undefined &&
+        Number.isFinite(maximoObservadoM) &&
+        maximoObservadoM >= hMin &&
+        maximoObservadoM <= hMax
+          ? (() => {
+              const x = MARGEN_IZQUIERDO + xParaAltura(maximoObservadoM, hMin, hMax, ANCHO_SVG);
+              return `
+                <line class="superficie-curva-maximo-linea" x1="${String(x)}" y1="0" x2="${String(x)}" y2="${String(ALTO_SVG)}" />
+                <text class="superficie-curva-maximo-etiqueta" x="${String(x)}" y="10" text-anchor="middle">máximo observado</text>
+              `;
+            })()
+          : "";
+
       container.innerHTML = `
-        <h2>Superficie afectada</h2>
-        <p class="card-subtitulo">Hectáreas que podrían inundarse según la altura del puerto.</p>
-        <svg class="superficie-svg" viewBox="0 0 ${String(anchoTotal)} ${String(altoTotal)}" role="img" aria-label="Curva de hectáreas inundadas según la altura del río">
+        <h2>Cuánta tierra se tapa de agua</h2>
+        <p class="card-subtitulo">Cuánto campo y ciudad quedaría bajo el agua según cuánto suba el río.</p>
+        <svg class="superficie-svg" preserveAspectRatio="none" viewBox="0 0 ${String(anchoTotal)} ${String(altoTotal)}" role="img" aria-label="Curva de hectáreas inundadas según la altura del río">
           <text class="superficie-eje-etiqueta" x="${String(MARGEN_IZQUIERDO - 4)}" y="9" text-anchor="end">${formatHectareas(haMax)}</text>
           <text class="superficie-eje-etiqueta" x="${String(MARGEN_IZQUIERDO - 4)}" y="${String(ALTO_SVG)}" text-anchor="end">${formatHectareas(haMin)}</text>
+          ${marcaMaximoHtml}
           <g transform="translate(${String(MARGEN_IZQUIERDO)}, 0)">
             <polyline points="${polylinePoints}" class="superficie-curva-linea" />
             <circle class="superficie-curva-punto" r="4" cx="0" cy="0" />

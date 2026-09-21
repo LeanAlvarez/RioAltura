@@ -5,6 +5,7 @@ import {
   describeSuperficie,
   escalarCurva,
   margenEjeY,
+  xParaAltura,
 } from "./superficieAfectada";
 
 function index(overrides: Partial<CapaIndex> = {}): CapaIndex {
@@ -61,6 +62,21 @@ describe("describeSuperficie", () => {
     expect(texto).toContain("5,00 m");
     expect(texto).toContain("400 ha");
     expect(texto).toMatch(/^Si el río llega a/);
+  });
+});
+
+describe("xParaAltura", () => {
+  it("0 en el mínimo y width en el máximo (G5, marca de máximo observado)", () => {
+    expect(xParaAltura(3, 3, 13, 100)).toBe(0);
+    expect(xParaAltura(13, 3, 13, 100)).toBe(100);
+  });
+
+  it("interpola linealmente en el medio", () => {
+    expect(xParaAltura(8, 3, 13, 100)).toBe(50);
+  });
+
+  it("no divide por cero cuando el rango es 0", () => {
+    expect(xParaAltura(5, 5, 5, 100)).toBe(0);
   });
 });
 
