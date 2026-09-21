@@ -14,17 +14,22 @@ import { formatMetros } from "../format";
 const MARGEN_ESCALA_M = 0.5;
 
 /**
- * Separación mínima (en % de alto de la regla) entre dos etiquetas de texto
- * consecutivas, para que no se superpongan. Los tres umbrales de Colón están
- * a menos de 1,1 m entre sí (6,80/7,10/7,90), así que casi siempre caen más
- * cerca que esto a la escala de la regla (mismo problema que resuelve
- * `posicionarEtiquetasUmbrales` en `components/grafico.ts`, acá en % en vez
- * de píxeles porque el alto real de la regla lo decide el CSS). El texto de
- * cada marca ocupa 2-3 líneas (ver `.regla-marca-texto` en style.css, con
- * `.regla-marcas` a `min-height: 12rem`), así que el mínimo es bastante más
- * grande que un simple salto de línea.
+ * Separación mínima (en % de alto de la regla) entre dos etiquetas
+ * consecutivas.
+ *
+ * La regla muestra SÓLO el número de cada umbral, no su nombre: los tres
+ * umbrales de Colón están a 0,30 m y 0,80 m entre sí sobre una escala de
+ * unos 4 m, así que tres nombres de dos renglones no entran al lado de sus
+ * marcas por más que se los separe — la versión anterior los corría tanto
+ * que "Alerta" terminaba al lado de la marca de 6,80 y "Evacuación
+ * preventiva" flotaba en el vacío, que es justo lo que el defecto G1 de la
+ * revisión de diseño reportaba. Los nombres y su explicación viven en la
+ * tarjeta "¿Qué significa cada nivel?", que está al lado.
+ *
+ * Con una sola línea corta ("7,90 m") alcanza una separación chica, y las
+ * etiquetas quedan pegadas a su marca en vez de desplazadas.
  */
-const SEPARACION_MIN_ETIQUETA_PCT = 22;
+const SEPARACION_MIN_ETIQUETA_PCT = 7;
 
 /**
  * Margen (en % de alto de la regla) que ninguna etiqueta de texto puede
@@ -178,10 +183,22 @@ export function deriveReglaHidrometricaView(alturaHoyM: number | null): ReglaHid
  * (ver `separarEtiquetas`). Anidarlos habría requerido mezclar dos `%`
  * relativos a alturas distintas (la del eje completo vs. la de la marca).
  */
-function marcaHtml(claseExtra: string, posicionPct: number, etiquetaPosicionPct: number, texto: string): string {
+function marcaHtml(
+  claseExtra: string,
+  posicionPct: number,
+  etiquetaPosicionPct: number,
+  texto: string,
+  nombreAccesible?: string,
+): string {
+  // El nombre del umbral no se dibuja (no entra junto a marcas tan juntas),
+  // pero sí tiene que llegar a un lector de pantalla: sin él la regla sería
+  // una lista de números sin significado.
+  const titulo = nombreAccesible === undefined ? "" : ` title="${nombreAccesible}"`;
+  const etiquetaAria =
+    nombreAccesible === undefined ? "" : ` aria-label="${texto} — ${nombreAccesible}"`;
   return `
     <span class="regla-marca-tick${claseExtra}" style="bottom:${String(posicionPct)}%" aria-hidden="true"></span>
-    <span class="regla-marca-texto${claseExtra}" style="bottom:${String(etiquetaPosicionPct)}%">${texto}</span>`;
+    <span class="regla-marca-texto${claseExtra}" style="bottom:${String(etiquetaPosicionPct)}%"${titulo}${etiquetaAria}>${texto}</span>`;
 }
 
 /**
@@ -212,7 +229,9 @@ function lineaGuiaSvg(claseExtra: string, posicionPct: number, etiquetaPosicionP
 
 export function buildReglaHidrometricaHtml(view: ReglaHidrometricaView): string {
   const marcasHtml = view.marcas
-    .map((m) => marcaHtml("", m.posicionPct, m.etiquetaPosicionPct, `${formatMetros(m.alturaM)} — ${m.etiqueta}`))
+    .map((m) =>
+      marcaHtml("", m.posicionPct, m.etiquetaPosicionPct, formatMetros(m.alturaM), m.etiqueta),
+    )
     .join("");
 
   const hoyHtml = view.hoy

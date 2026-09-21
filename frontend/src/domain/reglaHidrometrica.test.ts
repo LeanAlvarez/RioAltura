@@ -66,8 +66,9 @@ describe("deriveReglaHidrometricaView", () => {
   });
 
   it("separa las etiquetas de texto que quedarían superpuestas, sin mover el tick", () => {
-    // Los tres umbrales están a 0,3 y 0,8 m entre sí: a la escala mínima
-    // (rango de 2,1 m) las etiquetas de texto quedarían pegadas.
+    // Los tres umbrales están a 0,3 y 0,8 m entre sí. Con la etiqueta reducida
+    // a un solo número corto ("7,90 m") alcanza una separación chica, así que
+    // el texto queda junto a su marca en vez de desplazado media regla.
     const vista = deriveReglaHidrometricaView(null);
     const [preventiva, alerta, evacuacion] = vista.marcas;
     expect(preventiva && alerta && evacuacion).toBeTruthy();
@@ -76,8 +77,8 @@ describe("deriveReglaHidrometricaView", () => {
     // El tick queda exactamente a escala...
     expect(alerta.posicionPct).toBeGreaterThan(preventiva.posicionPct);
     // ...pero la etiqueta de texto se separa al menos el mínimo.
-    expect(alerta.etiquetaPosicionPct - preventiva.etiquetaPosicionPct).toBeGreaterThanOrEqual(22 - 1e-9);
-    expect(evacuacion.etiquetaPosicionPct - alerta.etiquetaPosicionPct).toBeGreaterThanOrEqual(22 - 1e-9);
+    expect(alerta.etiquetaPosicionPct - preventiva.etiquetaPosicionPct).toBeGreaterThanOrEqual(7 - 1e-9);
+    expect(evacuacion.etiquetaPosicionPct - alerta.etiquetaPosicionPct).toBeGreaterThanOrEqual(7 - 1e-9);
   });
 
   /**
@@ -111,7 +112,7 @@ describe("deriveReglaHidrometricaView", () => {
       const actual = posiciones[i];
       const anterior = posiciones[i - 1];
       if (actual === undefined || anterior === undefined) continue;
-      expect(actual - anterior).toBeGreaterThanOrEqual(22 - 1e-9);
+      expect(actual - anterior).toBeGreaterThanOrEqual(7 - 1e-9);
     }
   });
 });
@@ -148,5 +149,28 @@ describe("buildReglaHidrometricaHtml", () => {
     expect(marca.posicionPct).toBe(marca.etiquetaPosicionPct);
     const html = buildReglaHidrometricaHtml({ escala: vista.escala, marcas: [marca], hoy: null });
     expect(html).not.toContain("regla-marca-guia");
+  });
+});
+
+describe("G1: la etiqueta queda junto a su marca", () => {
+  it("ninguna etiqueta se aleja más de 10 puntos de su propio tick", () => {
+    // El defecto original: con etiquetas de dos renglones y 22 % de
+    // separación forzada, "Alerta" terminaba sobre la marca de 6,80 y
+    // "Evacuación preventiva" flotaba 129 px más abajo que su tick.
+    const vista = deriveReglaHidrometricaView(4.29);
+    for (const marca of vista.marcas) {
+      expect(Math.abs(marca.etiquetaPosicionPct - marca.posicionPct)).toBeLessThanOrEqual(10);
+    }
+  });
+
+  it("cada etiqueta sigue más cerca de su marca que de cualquier otra", () => {
+    const vista = deriveReglaHidrometricaView(4.29);
+    for (const marca of vista.marcas) {
+      const propia = Math.abs(marca.etiquetaPosicionPct - marca.posicionPct);
+      const ajenas = vista.marcas
+        .filter((o) => o !== marca)
+        .map((o) => Math.abs(marca.etiquetaPosicionPct - o.posicionPct));
+      expect(propia).toBeLessThan(Math.min(...ajenas));
+    }
   });
 });
