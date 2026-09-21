@@ -39,9 +39,15 @@ from shapely.ops import unary_union
 
 logger = logging.getLogger("generar_capas")
 
-# --- Domain constant (mirrors backend/app/config/dominio.py CERO_HIDROMETRO_IGN_M) ---
+# --- Domain constants (mirror backend/app/config/dominio.py) ---
 
 CERO_IGN_DEFAULT_M = -0.26
+
+# Mirrors CRECIDA_MAXIMA_OBSERVADA_M in backend/app/config/dominio.py (see the
+# source citation there). Exposed in index.json only so the frontend can show the
+# "escenario hipotético: nunca registrado en Colón" label above this height (spec
+# 008, S4); it never affects which levels are generated.
+CRECIDA_MAXIMA_OBSERVADA_M = 10.00
 
 # --- Geographic constants ---
 
@@ -55,9 +61,16 @@ MAX_EXPANSIONS_PER_SIDE = 4
 # --- Level / flooding constants ---
 
 NIVEL_MIN_M = 3.0
-NIVEL_MAX_M = 13.0
+NIVEL_MAX_M = 20.0
+# Three-tier step (spec 008, S1): 0.25 m up to and including STEP_SPLIT_M, 0.5 m
+# between STEP_SPLIT_M and STEP_SPLIT_2_M, 1.0 m above STEP_SPLIT_2_M. The step never
+# changes to fit the size budget (see S2): only simplification (tolerance, cleanup
+# thresholds) may change for that.
 STEP_SPLIT_M = 10.5
-STEP_ALTO_M = 0.5
+STEP_SPLIT_2_M = 13.0
+STEP_BAJO_M = 0.25
+STEP_MEDIO_M = 0.5
+STEP_ALTO_M = 1.0
 BASE_RIVER_LEVEL_MIN_M = 2.2
 BASE_RIVER_MARGIN_M = 0.3
 
@@ -87,7 +100,7 @@ DEPTH_CLASSES: dict[int, str] = {
 # tighter tolerance barely reduces the per-pixel "staircase" vertices that dominate
 # the vertex count once the mask is already cleaned (see clean_mask / --min-area-ha).
 DEFAULT_TOLERANCE_DEG = 0.0002
-DEFAULT_MAX_MB = 15.0
+DEFAULT_MAX_MB = 25.0
 MAX_TOLERANCE_ATTEMPTS = 3
 TOLERANCE_GROWTH_FACTOR = 1.5
 DEFAULT_OUT_DIR = "frontend/public/capas"
@@ -204,35 +217,51 @@ def plan_levels(
     min_level: float = NIVEL_MIN_M,
     max_level: float = NIVEL_MAX_M,
     split_level: float = STEP_SPLIT_M,
+    split_level_2: float = STEP_SPLIT_2_M,
 ) -> list[float]:
     """Build the sorted list of port-gauge levels to generate.
 
-    ``step_policy`` is either a single step in metres (uniform) or a dict
-    ``{"hasta_1050": step_low, "sobre_1050": step_high}`` for a two-tier
-    step below/above ``split_level``.
+    ``step_policy`` is either a single step in metres (uniform) or a dict with
+    keys ``hasta_1050`` (step up to and including ``split_level``), ``sobre_1050``
+    (step strictly between ``split_level`` and ``split_level_2``, required whenever
+    ``sobre_1050``'s tier is reachable) and ``sobre_13`` (step strictly above
+    ``split_level_2``, optional: omitting it stops the level set at
+    ``min(split_level_2, max_level)``, which is what the two-tier policy used
+    before spec 008 relied on).
     """
     min_cents = round(min_level * 100)
     max_cents = round(max_level * 100)
     split_cents = round(split_level * 100)
+    split2_cents = round(split_level_2 * 100)
     if isinstance(step_policy, dict):
         step_low_cents = round(step_policy["hasta_1050"] * 100)
-        step_high_cents = round(step_policy["sobre_1050"] * 100)
-        low = _frange_cents(min_cents, split_cents, step_low_cents)
-        high = _frange_cents(split_cents + step_high_cents, max_cents, step_high_cents)
-        levels_cents = low + high
+        levels_cents = _frange_cents(min_cents, min(split_cents, max_cents), step_low_cents)
+        if "sobre_1050" in step_policy and split_cents < max_cents:
+            step_mid_cents = round(step_policy["sobre_1050"] * 100)
+            mid_end_cents = min(split2_cents, max_cents)
+            levels_cents += _frange_cents(
+                split_cents + step_mid_cents, mid_end_cents, step_mid_cents
+            )
+        if "sobre_13" in step_policy and split2_cents < max_cents:
+            step_high_cents = round(step_policy["sobre_13"] * 100)
+            levels_cents += _frange_cents(
+                split2_cents + step_high_cents, max_cents, step_high_cents
+            )
     else:
         step_cents = round(step_policy * 100)
         levels_cents = _frange_cents(min_cents, max_cents, step_cents)
     return [cents / 100 for cents in levels_cents]
 
 
-def decide_step_policy(
-    total_bytes: int, max_bytes: float = DEFAULT_MAX_MB * 1024 * 1024
-) -> dict[str, float]:
-    """Uniform 0.25 m step if within budget, else the mixed 0.25/0.5 m policy."""
-    if total_bytes <= max_bytes:
-        return {"hasta_1050": 0.25, "sobre_1050": 0.25}
-    return {"hasta_1050": 0.25, "sobre_1050": STEP_ALTO_M}
+# Fixed three-tier step mandated by spec 008 (S1): 0.25 m up to 10.50 m, 0.5 m up to
+# 13.00 m, 1.0 m up to 20.00 m. Unlike the two-tier policy it replaces, this never
+# changes to fit the size budget (S2): only the simplification tolerance and cleanup
+# thresholds may grow for that, never the level range or step.
+DEFAULT_STEP_POLICY: dict[str, float] = {
+    "hasta_1050": STEP_BAJO_M,
+    "sobre_1050": STEP_MEDIO_M,
+    "sobre_13": STEP_ALTO_M,
+}
 
 
 def round_bbox(bbox: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
@@ -937,7 +966,9 @@ def main(argv: list[str] | None = None) -> int:
                 args.max_mb,
             )
     else:
-        step_policy = {"hasta_1050": 0.25, "sobre_1050": 0.25}
+        # Fixed three-tier step (spec 008, S1): never changed to fit the budget.
+        # Only the simplification tolerance escalates below (S2).
+        step_policy = DEFAULT_STEP_POLICY
         final_levels = plan_levels(step_policy)
         results, total_bytes = _write_levels(
             final_levels,
@@ -954,26 +985,12 @@ def main(argv: list[str] | None = None) -> int:
 
         if total_bytes > max_bytes:
             logger.warning(
-                "Total size %.2f MB exceeds the %.1f MB budget; switching to the mixed "
-                "step policy.",
+                "Total size %.2f MB exceeds the %.1f MB budget; increasing the "
+                "simplification tolerance (the level range and step stay fixed, "
+                "spec 008 S2).",
                 total_bytes / 1024 / 1024,
                 args.max_mb,
             )
-            step_policy = decide_step_policy(int(total_bytes), max_bytes)
-            final_levels = plan_levels(step_policy)
-            results, total_bytes = _write_levels(
-                final_levels,
-                masks,
-                dem,
-                transform,
-                args.cero_ign,
-                tolerance,
-                area_m2,
-                out_dir,
-                min_area_deg2,
-                min_hole_area_deg2,
-            )
-
             attempt = 0
             while total_bytes > max_bytes and attempt < MAX_TOLERANCE_ATTEMPTS:
                 attempt += 1
@@ -1031,6 +1048,9 @@ def main(argv: list[str] | None = None) -> int:
         "paso": step_policy,
         "nivel_max": NIVEL_MAX_M,
         "nivel_min": NIVEL_MIN_M,
+        # Spec 008 S4: above this height, the frontend shows "escenario hipotético:
+        # nunca registrado en Colón" instead of treating it like a normal scenario.
+        "crecida_maxima_observada_m": CRECIDA_MAXIMA_OBSERVADA_M,
         "clases": [{"clase": c, "etiqueta": label} for c, label in DEPTH_CLASSES.items()],
         "capas": [
             {
