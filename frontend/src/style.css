@@ -11,6 +11,10 @@
   --accent: #1b6ea8;
   --skeleton: #e7eaee;
   color-scheme: light dark;
+  --agua-1: #9ecae1;
+  --agua-2: #3182bd;
+  --agua-3: #08519c;
+  --aviso: #a35d00;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--fg);
   background: var(--bg);
@@ -361,5 +365,219 @@ body {
 @media (min-width: 720px) {
   .dashboard {
     padding: 1.5rem;
+  }
+}
+
+/* --- Mapa de inundación --- */
+
+/*
+ * The map overlays (panel, notices, errors) keep a light surface in both
+ * themes, like Leaflet's own controls, because they sit on satellite tiles.
+ * They must therefore pin the light text tokens: inheriting the themed ones
+ * paints near-white text on a near-white panel under `prefers-color-scheme:
+ * dark`. Redefining the custom properties here also fixes every descendant
+ * that reads them.
+ */
+.capas-panel,
+.capas-aviso-modelo,
+.capas-fuera-rango,
+.capas-error,
+.leaflet-container .leaflet-control-attribution {
+  --fg: #1c2430;
+  --muted: #5b6573;
+  --error: #b3261e;
+  --aviso: #a35d00;
+  color: var(--fg);
+}
+
+.capas-aviso-modelo {
+  max-width: 220px;
+  padding: 0.35rem 0.5rem;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: var(--muted);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.capas-fuera-rango {
+  position: absolute;
+  top: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  max-width: min(92%, 32rem);
+  padding: 0.5rem 0.75rem;
+  background: #fff4e5;
+  color: var(--aviso);
+  border: 1px solid var(--aviso);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.capas-error {
+  position: absolute;
+  bottom: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 0.4rem 0.75rem;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--error);
+  border-radius: 6px;
+  font-size: 0.8rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+.capas-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  max-height: 40dvh;
+  overflow-y: auto;
+  padding: 0.6rem 0.75rem calc(0.6rem + env(safe-area-inset-bottom));
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1px solid #e1e5ea;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.capas-lectura {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
+.capas-altura {
+  font-size: 1.4rem;
+}
+
+.capas-cota,
+.capas-hectareas {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.capas-mostrando {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.capas-slider {
+  width: 100%;
+  height: 40px;
+  touch-action: pan-y;
+}
+
+.capas-escenarios {
+  display: flex;
+  gap: 0.4rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+  -webkit-overflow-scrolling: touch;
+}
+
+.capas-escenario {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid #cfd6de;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--fg);
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.capas-escenario[aria-pressed="true"] {
+  background: var(--agua-2);
+  border-color: var(--agua-2);
+  color: #fff;
+}
+
+.capas-escenario:disabled {
+  opacity: 0.45;
+}
+
+.capas-leyenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.capas-leyenda-item::before {
+  content: "";
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: 0.3rem;
+  border-radius: 2px;
+  vertical-align: -1px;
+}
+
+.capas-leyenda-clase-1::before {
+  background: var(--agua-1);
+}
+
+.capas-leyenda-clase-2::before {
+  background: var(--agua-2);
+}
+
+.capas-leyenda-clase-3::before {
+  background: var(--agua-3);
+}
+
+.capas-generado {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+@media (max-width: 767px) {
+  /*
+   * Below 768px the panel is a bottom sheet, and Leaflet anchors its
+   * attribution to the same bottom edge — so the two texts overlap and both
+   * become unreadable. Lift the attribution above the sheet and reserve room
+   * for it, instead of hiding a credit we are required to show.
+   */
+  /*
+   * Leaflet gives `.leaflet-bottom` its own stacking context, so raising the
+   * attribution itself does nothing against the panel — the positioned
+   * ancestor is what competes with it.
+   */
+  .leaflet-container .leaflet-control-container .leaflet-bottom {
+    z-index: 1001;
+  }
+
+  .capas-panel {
+    padding-bottom: calc(2.6rem + env(safe-area-inset-bottom));
+  }
+}
+
+@media (min-width: 768px) {
+  .capas-panel {
+    left: auto;
+    right: 0.75rem;
+    /* Leave the collapsed layers control (top-right) visible above the card. */
+    top: 3.5rem;
+    bottom: 0.75rem;
+    width: 20rem;
+    max-height: none;
+    border-radius: 10px;
+    border: 1px solid #e1e5ea;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
   }
 }
