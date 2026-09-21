@@ -24,6 +24,9 @@ describe("buildChartSeries", () => {
       altura_est_m: 5.9,
       altura_min_m: 4.9,
       altura_max_m: 6.9,
+      altura_anclada_m: 5.9,
+      altura_anclada_min_m: 4.9,
+      altura_anclada_max_m: 6.9,
       extrapolado: false,
     },
   ];
@@ -66,6 +69,9 @@ describe("buildResumenTexto", () => {
         altura_est_m: 5.9,
         altura_min_m: 4.9,
         altura_max_m: 6.9,
+        altura_anclada_m: 5.9,
+        altura_anclada_min_m: 4.9,
+        altura_anclada_max_m: 6.9,
         extrapolado: false,
       },
     ];

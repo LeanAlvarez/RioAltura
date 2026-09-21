@@ -1,5 +1,6 @@
 import type { FetchResult } from "../api/client";
 import type { DiaPronostico, Pronostico } from "../api/types";
+import { describeAnclaje } from "../domain/anclaje";
 import { describeAviso } from "../domain/aviso";
 import { calcularTendencia, formatDiaCorto, formatDiaSemanaFecha, formatRangoMetros, type Tendencia } from "../format";
 import { renderCardError, renderCardSkeleton } from "./card";
@@ -22,16 +23,17 @@ export type ProximosDiasView =
       avisoLabel: string;
       frase: string;
       fraseExtrapolada: boolean;
+      anclajeTexto: string | null;
       dias: DiaMiniView[];
       hayExtrapolados: boolean;
     };
 
-/** El día usado para la frase: el de mayor altura estimada entre los próximos (lead >= 1). */
+/** El día usado para la frase: el de mayor altura (anclada) máxima entre los próximos (lead >= 1). */
 function elegirDiaMaximo(dias: readonly DiaPronostico[]): DiaPronostico | undefined {
   const candidatos = dias.filter((d) => d.lead_dias >= 1);
   const pool = candidatos.length > 0 ? candidatos : dias;
   return pool.reduce<DiaPronostico | undefined>(
-    (max, dia) => (max === undefined || dia.altura_max_m > max.altura_max_m ? dia : max),
+    (max, dia) => (max === undefined || dia.altura_anclada_max_m > max.altura_anclada_max_m ? dia : max),
     undefined,
   );
 }
@@ -39,10 +41,10 @@ function elegirDiaMaximo(dias: readonly DiaPronostico[]): DiaPronostico | undefi
 function construirDiasMini(dias: readonly DiaPronostico[]): DiaMiniView[] {
   return dias.map((dia, index) => {
     const anterior = dias[index - 1];
-    const delta = anterior ? dia.altura_est_m - anterior.altura_est_m : null;
+    const delta = anterior ? dia.altura_anclada_m - anterior.altura_anclada_m : null;
     return {
       dia: formatDiaCorto(dia.fecha),
-      rango: formatRangoMetros(dia.altura_min_m, dia.altura_max_m),
+      rango: formatRangoMetros(dia.altura_anclada_min_m, dia.altura_anclada_max_m),
       tendencia: calcularTendencia(delta),
       extrapolado: dia.extrapolado,
     };
@@ -61,13 +63,14 @@ export function deriveProximosDiasView(state: ProximosDiasState): ProximosDiasVi
   const frase =
     diaMaximo === undefined
       ? "Todavía no hay pronóstico para los próximos días."
-      : `El río podría llegar a ${formatRangoMetros(diaMaximo.altura_min_m, diaMaximo.altura_max_m)} el ${formatDiaSemanaFecha(diaMaximo.fecha)}.`;
+      : `El río podría llegar a ${formatRangoMetros(diaMaximo.altura_anclada_min_m, diaMaximo.altura_anclada_max_m)} el ${formatDiaSemanaFecha(diaMaximo.fecha)}.`;
 
   return {
     kind: "ready",
     avisoLabel: describeAviso(data.aviso.nivel),
     frase,
     fraseExtrapolada: diaMaximo?.extrapolado ?? false,
+    anclajeTexto: describeAnclaje(data.anclaje),
     dias: construirDiasMini(data.dias),
     hayExtrapolados: data.dias.some((d) => d.extrapolado),
   };
@@ -98,7 +101,9 @@ export function renderProximosDias(container: HTMLElement, view: ProximosDiasVie
     .map((dia) => {
       const flecha = dia.tendencia ? FLECHAS[dia.tendencia] : "–";
       const flechaAlt = dia.tendencia ? FLECHAS_ALT[dia.tendencia] : "sin datos previos";
-      const caveat = dia.extrapolado ? ` <span class="caveat" title="Estimación fuera del rango calibrado">*</span>` : "";
+      const caveat = dia.extrapolado
+        ? ` <span class="caveat" title="Estimación menos confiable: el río podría estar más alto de lo que podemos calcular con precisión">*</span>`
+        : "";
       return `
         <li>
           <span class="dia-mini-fecha">${dia.dia}</span>
@@ -113,9 +118,10 @@ export function renderProximosDias(container: HTMLElement, view: ProximosDiasVie
     <h2>${TITULO}</h2>
     <p class="aviso-nivel">Nivel de aviso: <strong>${view.avisoLabel}</strong></p>
     <p class="frase-pronostico">
-      ${view.frase}${view.fraseExtrapolada ? ' <span class="caveat">Esta estimación excede el rango calibrado de la curva: es una extrapolación.</span>' : ""}
+      ${view.frase}${view.fraseExtrapolada ? ' <span class="caveat">Este día el pronóstico es menos confiable: el río podría estar más alto de lo que podemos calcular con precisión.</span>' : ""}
     </p>
+    ${view.anclajeTexto ? `<p class="anclaje-nota">${view.anclajeTexto}</p>` : ""}
     <ul class="dias-mini">${itemsMini}</ul>
-    ${view.hayExtrapolados ? '<p class="caveat-nota">* Estimación fuera del rango calibrado de la curva (extrapolación).</p>' : ""}
+    ${view.hayExtrapolados ? '<p class="caveat-nota">* Estimación menos confiable: el río podría estar más alto de lo que podemos calcular con precisión.</p>' : ""}
   `;
 }

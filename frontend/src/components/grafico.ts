@@ -37,9 +37,10 @@ export interface ChartSeries {
 }
 
 /**
- * Pure: aligns real levels, current forecast (band + centre) and optional
- * historical forecast onto one shared, sorted, de-duplicated x-axis (epoch
- * seconds), with `null` where a series has no data for that day. No DOM.
+ * Pure: aligns real levels, current forecast (anchored band + centre, spec
+ * 007 C2) and optional historical forecast onto one shared, sorted,
+ * de-duplicated x-axis (epoch seconds), with `null` where a series has no
+ * data for that day. No DOM.
  */
 export function buildChartSeries(
   alturas: readonly AlturaDiaria[],
@@ -61,9 +62,9 @@ export function buildChartSeries(
   return {
     x,
     real: fechasOrdenadas.map((f) => realPorFecha.get(f) ?? null),
-    pronosticoMin: fechasOrdenadas.map((f) => pronosticoPorFecha.get(f)?.altura_min_m ?? null),
-    pronosticoMax: fechasOrdenadas.map((f) => pronosticoPorFecha.get(f)?.altura_max_m ?? null),
-    pronosticoCentro: fechasOrdenadas.map((f) => pronosticoPorFecha.get(f)?.altura_est_m ?? null),
+    pronosticoMin: fechasOrdenadas.map((f) => pronosticoPorFecha.get(f)?.altura_anclada_min_m ?? null),
+    pronosticoMax: fechasOrdenadas.map((f) => pronosticoPorFecha.get(f)?.altura_anclada_max_m ?? null),
+    pronosticoCentro: fechasOrdenadas.map((f) => pronosticoPorFecha.get(f)?.altura_anclada_m ?? null),
     historico: fechasOrdenadas.map((f) => historicoPorFecha.get(f) ?? null),
   };
 }
@@ -79,8 +80,8 @@ export function buildResumenTexto(alturas: readonly AlturaDiaria[], pronostico: 
   if (ultimo) texto += `, ${formatMetros(ultimo.altura_m)} el último dato (${formatDiaSemanaFecha(ultimo.fecha)})`;
   texto += ".";
   if (pronostico && pronostico.length > 0) {
-    const maxCentro = pronostico.reduce((m, d) => (d.altura_max_m > m.altura_max_m ? d : m));
-    texto += ` Pronóstico: podría llegar a ${formatRangoMetros(maxCentro.altura_min_m, maxCentro.altura_max_m)} el ${formatDiaSemanaFecha(maxCentro.fecha)}.`;
+    const maxCentro = pronostico.reduce((m, d) => (d.altura_anclada_max_m > m.altura_anclada_max_m ? d : m));
+    texto += ` Pronóstico: podría llegar a ${formatRangoMetros(maxCentro.altura_anclada_min_m, maxCentro.altura_anclada_max_m)} el ${formatDiaSemanaFecha(maxCentro.fecha)}.`;
   }
   return texto;
 }
@@ -119,8 +120,74 @@ function construirColores(referencia: HTMLElement) {
   };
 }
 
-function construirOpciones(width: number, mostrarHistorico: boolean, referencia: HTMLElement): uPlot.Options {
-  const colores = construirColores(referencia);
+const fechaEjeFormatter = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short" });
+const metrosEjeFormatter = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 });
+
+const ALTO_ETIQUETA_UMBRAL = 16;
+
+interface EtiquetaUmbralEl {
+  el: HTMLDivElement;
+  valor: number;
+}
+
+/**
+ * Crea un `<div>` por umbral, pegado al margen derecho del gráfico (spec 007
+ * T2: "umbrales etiquetados"). Son elementos de HTML normales —no texto
+ * dibujado en el canvas— para no tener que reproducir a mano la conversión
+ * de coordenadas de uPlot (canvas pixels vs. CSS pixels según densidad de
+ * pantalla); solo se les recalcula la posición `top` en cada redibujado.
+ */
+function crearEtiquetasUmbrales(
+  wrapEl: HTMLElement,
+  colores: ReturnType<typeof construirColores>,
+): EtiquetaUmbralEl[] {
+  wrapEl.querySelectorAll(".grafico-umbral-etiqueta").forEach((el) => el.remove());
+  return colores.thresholds.map((t) => {
+    const el = document.createElement("div");
+    el.className = "grafico-umbral-etiqueta";
+    el.style.color = t.color;
+    el.textContent = `${t.label} (${metrosEjeFormatter.format(t.valor)} m)`;
+    wrapEl.appendChild(el);
+    return { el, valor: t.valor };
+  });
+}
+
+/**
+ * Los tres umbrales de Colón están a menos de 1,1 m entre sí (6,80 / 7,10 /
+ * 7,90): a la escala del gráfico casi siempre caen a menos de una línea de
+ * texto de distancia, así que se separan verticalmente lo mínimo necesario
+ * para no superponerse.
+ */
+function posicionarEtiquetasUmbrales(u: uPlot, wrapEl: HTMLElement, etiquetas: readonly EtiquetaUmbralEl[]): void {
+  const wrapRect = wrapEl.getBoundingClientRect();
+  const overRect = u.over.getBoundingClientRect();
+  const offsetTop = overRect.top - wrapRect.top;
+  const alto = overRect.height;
+
+  const posiciones = etiquetas
+    .map((e) => ({ ...e, top: offsetTop + u.valToPos(e.valor, "y", false) }))
+    .filter((e) => e.top >= offsetTop - 1 && e.top <= offsetTop + alto + 1)
+    .sort((a, b) => a.top - b.top);
+
+  for (let i = 1; i < posiciones.length; i++) {
+    const actual = posiciones[i];
+    const anterior = posiciones[i - 1];
+    if (!actual || !anterior) continue;
+    if (actual.top - anterior.top < ALTO_ETIQUETA_UMBRAL) actual.top = anterior.top + ALTO_ETIQUETA_UMBRAL;
+  }
+
+  for (const e of etiquetas) e.el.hidden = true;
+  for (const p of posiciones) {
+    p.el.hidden = false;
+    p.el.style.top = `${p.top}px`;
+  }
+}
+
+function construirOpciones(
+  width: number,
+  mostrarHistorico: boolean,
+  colores: ReturnType<typeof construirColores>,
+): uPlot.Options {
   const uPlotSeries: uPlot.Series[] = [
     {},
     { label: "Altura real", stroke: colores.real, width: 2, points: { show: false } },
@@ -156,12 +223,26 @@ function construirOpciones(width: number, mostrarHistorico: boolean, referencia:
 
   return {
     width,
-    height: 260,
+    height: 280,
+    padding: [12, 12, 0, 0],
     scales: { x: { time: true } },
     series: uPlotSeries,
     bands: [{ series: [2, 3] }],
-    axes: [{}, { label: "metros" }],
-    legend: { show: true },
+    axes: [
+      {
+        values: (_u, splits) => splits.map((s) => fechaEjeFormatter.format(new Date(s * 1000))),
+      },
+      {
+        label: "Altura (metros)",
+        values: (_u, splits) => splits.map((s) => metrosEjeFormatter.format(s)),
+      },
+    ],
+    cursor: { points: { show: true } },
+    // La leyenda de uPlot muestra "--" hasta que hay cursor: se elimina y se
+    // escribe una propia en el DOM (ver `construirLeyenda`). Los umbrales
+    // etiquetados también se dibujan aparte, como HTML (ver
+    // `crearEtiquetasUmbrales`/`posicionarEtiquetasUmbrales`).
+    legend: { show: false },
   };
 }
 
@@ -178,6 +259,58 @@ function construirDatos(series: ChartSeries, mostrarHistorico: boolean): uPlot.A
   return data as unknown as uPlot.AlignedData;
 }
 
+interface LeyendaItem {
+  label: string;
+  color: string;
+  dash: boolean;
+}
+
+/** Leyenda propia (reemplaza la de uPlot, que solo muestra "--" hasta pasar el cursor). */
+function construirItemsLeyenda(colores: ReturnType<typeof construirColores>, mostrarHistorico: boolean): LeyendaItem[] {
+  const items: LeyendaItem[] = [
+    { label: "Altura real", color: colores.real, dash: false },
+    { label: "Pronóstico (rango)", color: colores.pronostico, dash: false },
+    { label: "Pronóstico (centro)", color: colores.pronostico, dash: true },
+  ];
+  if (mostrarHistorico) {
+    items.push({ label: "Pronóstico a 3 días (histórico)", color: colores.historico, dash: true });
+  }
+  for (const t of colores.thresholds) items.push({ label: t.label, color: t.color, dash: true });
+  return items;
+}
+
+function renderLeyenda(container: HTMLElement, items: LeyendaItem[]): void {
+  container.innerHTML = items
+    .map(
+      (item) => `
+        <li>
+          <span class="grafico-leyenda-linea${item.dash ? " grafico-leyenda-linea--punteada" : ""}" style="--color-linea:${item.color}"></span>
+          ${item.label}
+        </li>
+      `,
+    )
+    .join("");
+}
+
+const tooltipFechaFormatter = new Intl.DateTimeFormat("es-AR", { weekday: "short", day: "numeric", month: "short" });
+
+/** Contenido del tooltip para el índice `idx` de `series`, o null si no hay ningún valor ese día. */
+function contenidoTooltip(series: ChartSeries, idx: number): string | null {
+  const xIdx = series.x[idx];
+  if (xIdx === undefined) return null;
+  const fecha = tooltipFechaFormatter.format(new Date(xIdx * 1000));
+  const partes: string[] = [];
+  const real = series.real[idx];
+  if (real !== null && real !== undefined) partes.push(`Altura real: ${formatMetros(real)}`);
+  const min = series.pronosticoMin[idx];
+  const max = series.pronosticoMax[idx];
+  if (min !== null && min !== undefined && max !== null && max !== undefined) {
+    partes.push(`Pronóstico: ${formatRangoMetros(min, max)}`);
+  }
+  if (partes.length === 0) return null;
+  return `<strong>${fecha}</strong><br>${partes.join("<br>")}`;
+}
+
 /**
  * Owns the range selector / historical toggle, fetches data (independently
  * of the other cards) and (re)draws the uPlot chart. Not unit-tested (uPlot
@@ -187,6 +320,8 @@ function construirDatos(series: ChartSeries, mostrarHistorico: boolean): uPlot.A
 export function mountGrafico(container: HTMLElement, deps: GraficoDeps = defaultDeps): void {
   const estado: EstadoGrafico = { rango: 90, mostrarHistorico: false };
   let instancia: uPlot | null = null;
+  let ultimaSeries: ChartSeries | null = null;
+  let umbralesActuales: EtiquetaUmbralEl[] = [];
 
   container.innerHTML = `
     <h2>Evolución y pronóstico</h2>
@@ -199,7 +334,11 @@ export function mountGrafico(container: HTMLElement, deps: GraficoDeps = default
         Mostrar pronóstico a 3 días que se hizo en su momento
       </label>
     </div>
-    <div class="grafico-canvas" id="grafico-canvas"></div>
+    <div class="grafico-canvas-wrap">
+      <div class="grafico-canvas" id="grafico-canvas"></div>
+      <div class="grafico-tooltip" id="grafico-tooltip" hidden></div>
+    </div>
+    <ul class="grafico-leyenda" id="grafico-leyenda" aria-hidden="true"></ul>
     <p class="grafico-estado" role="status" aria-live="polite"></p>
     <details class="grafico-alternativa">
       <summary>Ver como texto</summary>
@@ -208,14 +347,49 @@ export function mountGrafico(container: HTMLElement, deps: GraficoDeps = default
   `;
 
   const canvasEl = container.querySelector<HTMLDivElement>("#grafico-canvas");
+  const canvasWrapEl = container.querySelector<HTMLDivElement>(".grafico-canvas-wrap");
+  const tooltipEl = container.querySelector<HTMLDivElement>("#grafico-tooltip");
+  const leyendaEl = container.querySelector<HTMLUListElement>("#grafico-leyenda");
   const estadoEl = container.querySelector<HTMLParagraphElement>(".grafico-estado");
   const resumenEl = container.querySelector<HTMLParagraphElement>(".grafico-resumen");
   const toggleEl = container.querySelector<HTMLInputElement>("#toggle-historico");
-  if (!canvasEl || !estadoEl || !resumenEl || !toggleEl) return;
+  if (!canvasEl || !canvasWrapEl || !tooltipEl || !leyendaEl || !estadoEl || !resumenEl || !toggleEl) return;
+
+  function mostrarTooltip(idx: number, left: number, top: number): void {
+    if (!ultimaSeries || !tooltipEl || !canvasWrapEl) return;
+    const contenido = contenidoTooltip(ultimaSeries, idx);
+    if (!contenido) {
+      tooltipEl.hidden = true;
+      return;
+    }
+    tooltipEl.innerHTML = contenido;
+    tooltipEl.hidden = false;
+    const maxLeft = canvasWrapEl.clientWidth - tooltipEl.offsetWidth - 4;
+    tooltipEl.style.left = `${Math.max(4, Math.min(left + 12, maxLeft))}px`;
+    tooltipEl.style.top = `${Math.max(4, top - 12)}px`;
+  }
+
+  function ocultarTooltip(): void {
+    if (tooltipEl) tooltipEl.hidden = true;
+  }
+
+  /**
+   * `cursor.left`/`top` y `.u-over`'s propio rect están en CSS pixels
+   * *relativos al área de trazado* (sin el eje Y ni sus números). El
+   * tooltip, en cambio, se posiciona relativo a `.grafico-canvas-wrap`
+   * (todo el gráfico). Este es el desplazamiento entre ambos orígenes.
+   */
+  function offsetAreaTrazadoEnWrap(): { x: number; y: number } {
+    if (!instancia || !canvasWrapEl) return { x: 0, y: 0 };
+    const overRect = instancia.over.getBoundingClientRect();
+    const wrapRect = canvasWrapEl.getBoundingClientRect();
+    return { x: overRect.left - wrapRect.left, y: overRect.top - wrapRect.top };
+  }
 
   async function actualizar(): Promise<void> {
-    if (!estadoEl || !canvasEl || !resumenEl) return;
+    if (!estadoEl || !canvasEl || !canvasWrapEl || !resumenEl || !leyendaEl) return;
     estadoEl.textContent = "Cargando…";
+    ocultarTooltip();
 
     const ahora = new Date();
     const { desde, hasta } = calcularRangoFechas(estado.rango, ahora);
@@ -238,18 +412,66 @@ export function mountGrafico(container: HTMLElement, deps: GraficoDeps = default
     const historico = historicoResult && historicoResult.kind === "ok" ? historicoResult.data : null;
 
     const series = buildChartSeries(alturasResult.data, dias, historico);
+    ultimaSeries = series;
     estadoEl.textContent =
       pronosticoResult.kind === "ok" ? "" : "El pronóstico no está disponible; se muestra solo la altura real.";
     resumenEl.textContent = buildResumenTexto(alturasResult.data, dias);
+
+    const colores = construirColores(container);
+    renderLeyenda(leyendaEl, construirItemsLeyenda(colores, estado.mostrarHistorico));
 
     instancia?.destroy();
     const width = Math.max(280, canvasEl.clientWidth || container.clientWidth || 320);
     canvasEl.replaceChildren();
     instancia = new uPlot(
-      construirOpciones(width, estado.mostrarHistorico, container),
+      construirOpciones(width, estado.mostrarHistorico, colores),
       construirDatos(series, estado.mostrarHistorico),
       canvasEl,
     );
+
+    instancia.over.addEventListener("mouseleave", ocultarTooltip);
+    instancia.over.addEventListener("mousemove", () => {
+      if (!instancia) return;
+      const idx = instancia.cursor.idx;
+      if (idx === null || idx === undefined) return;
+      const offset = offsetAreaTrazadoEnWrap();
+      mostrarTooltip(idx, offset.x + (instancia.cursor.left ?? 0), offset.y + (instancia.cursor.top ?? 0));
+    });
+    // Táctil: uPlot no traduce touch a cursor por defecto; se calcula el
+    // índice más cercano a mano a partir de la posición X tocada.
+    instancia.over.addEventListener(
+      "touchstart",
+      (ev) => {
+        if (!instancia || !ultimaSeries) return;
+        const touch = ev.touches[0];
+        if (!touch) return;
+        const rect = instancia.over.getBoundingClientRect();
+        const left = touch.clientX - rect.left;
+        const top = touch.clientY - rect.top;
+        const valorX = instancia.posToVal(left, "x");
+        let idx = 0;
+        let mejor = Infinity;
+        ultimaSeries.x.forEach((x, i) => {
+          const dist = Math.abs(x - valorX);
+          if (dist < mejor) {
+            mejor = dist;
+            idx = i;
+          }
+        });
+        const offset = offsetAreaTrazadoEnWrap();
+        mostrarTooltip(idx, offset.x + left, offset.y + top);
+      },
+      { passive: true },
+    );
+
+    const etiquetasUmbrales = crearEtiquetasUmbrales(canvasWrapEl, colores);
+    umbralesActuales = etiquetasUmbrales;
+    // uPlot dimensiona el canvas en el frame siguiente a la construcción:
+    // medir el área de trazado en el mismo tick da alto/ancho en cero.
+    requestAnimationFrame(() => {
+      if (!instancia || !canvasWrapEl) return;
+      posicionarEtiquetasUmbrales(instancia, canvasWrapEl, umbralesActuales);
+    });
   }
 
   container.querySelectorAll<HTMLButtonElement>("[data-rango]").forEach((btn) => {
@@ -269,7 +491,9 @@ export function mountGrafico(container: HTMLElement, deps: GraficoDeps = default
   });
 
   window.addEventListener("resize", () => {
-    if (instancia && canvasEl) instancia.setSize({ width: Math.max(280, canvasEl.clientWidth), height: 260 });
+    if (!instancia || !canvasEl || !canvasWrapEl) return;
+    instancia.setSize({ width: Math.max(280, canvasEl.clientWidth), height: 280 });
+    posicionarEtiquetasUmbrales(instancia, canvasWrapEl, umbralesActuales);
   });
 
   void actualizar();
