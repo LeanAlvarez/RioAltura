@@ -638,15 +638,17 @@ body {
   gap: 0.35rem;
 }
 
+/*
+ * Paleta v3 (spec 008 seguimiento): el fondo (sólido o
+ * `repeating-linear-gradient`) y el alto vienen inline desde
+ * `graficos/paleta.ts` (`fondoTrazoCss`), para que la muestra reproduzca
+ * exactamente el color, grosor y patrón de guiones de su línea — nunca
+ * puede desincronizarse de la paleta porque no hay valores propios acá.
+ */
 .grafico-leyenda-linea {
   display: inline-block;
   width: 1.1rem;
-  height: 0;
-  border-top: 2.5px solid var(--color-linea);
-}
-
-.grafico-leyenda-linea--punteada {
-  border-top-style: dashed;
+  border-radius: 1px;
 }
 
 .grafico-estado {
@@ -696,13 +698,14 @@ body {
 }
 
 .historial-leyenda-muestra--banda {
-  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  /* `--graf-franja-alerta` ya trae la opacidad aplicada (paleta.ts). */
+  background: var(--graf-franja-alerta);
   border-radius: 2px;
 }
 
 .historial-leyenda-muestra--punto {
   border-radius: 50%;
-  background: var(--fg);
+  background: var(--graf-altura-real);
   border: 2px solid var(--card-bg);
   box-shadow: 0 0 0 1px var(--border);
 }
@@ -716,6 +719,14 @@ body {
 /* --- Aguas arriba (T5) --- */
 
 /* Reusa .frase-pronostico y .tendencia de la tarjeta "Próximos días". */
+
+/*
+ * Mini gráfico "Colón vs aguas arriba" (paleta v3): llena el hueco que
+ * dejaba la tarjeta con solo texto (diagnóstico de esta tarea).
+ */
+.aguas-arriba-chart-wrap {
+  margin-top: 0.75rem;
+}
 
 /* --- Contexto (T6) --- */
 

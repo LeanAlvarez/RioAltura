@@ -70,9 +70,40 @@ function actualizarBoton(boton: HTMLButtonElement, tema: Tema): void {
   boton.textContent = etiqueta.icono;
 }
 
+// --- Suscripción a cambios de tema (para que los gráficos se redibujen) --
+
+type OyenteTema = (tema: Tema) => void;
+
+const oyentesTema = new Set<OyenteTema>();
+
+/**
+ * Se notifica cada vez que el tema *efectivo* cambia de verdad — por el
+ * toggle o porque el sistema cambió `prefers-color-scheme` mientras no hay
+ * una elección explícita guardada. Cada gráfico se suscribe al montarse y
+ * desuscribe al destruirse (la función devuelta): sin eso, quedaría un
+ * listener vivo por cada gráfico ya destruido (memory leak).
+ */
+export function onTemaCambia(callback: OyenteTema): () => void {
+  oyentesTema.add(callback);
+  return () => {
+    oyentesTema.delete(callback);
+  };
+}
+
+/**
+ * Pure (no toca DOM): notifica a los suscriptos de `onTemaCambia`. Exportada
+ * para poder testear la mecánica de suscripción/notificación sin pasar por
+ * `mountThemeToggle` (que sí toca `document`/`window` reales).
+ */
+export function notificarCambioTema(tema: Tema): void {
+  for (const callback of oyentesTema) callback(tema);
+}
+
 /**
  * Aplica el tema inicial al `<html>` y engancha el botón del header (T1) para
- * alternarlo y guardarlo. No testeado unitariamente: toca `document`,
+ * alternarlo y guardarlo. También escucha cambios de `prefers-color-scheme`
+ * mientras el usuario no eligió un tema explícito (T2: la elección explícita
+ * siempre gana). No testeado unitariamente: toca `document`,
  * `window.matchMedia` y `localStorage` reales.
  */
 export function mountThemeToggle(
@@ -80,10 +111,13 @@ export function mountThemeToggle(
   root: HTMLElement = document.documentElement,
   storage: StorageLike = window.localStorage,
 ): void {
+  let mql: MediaQueryList | null = null;
   let prefiereOscuro = false;
   try {
-    prefiereOscuro = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    mql = window.matchMedia("(prefers-color-scheme: dark)");
+    prefiereOscuro = mql.matches;
   } catch {
+    mql = null;
     prefiereOscuro = false;
   }
 
@@ -96,5 +130,24 @@ export function mountThemeToggle(
     aplicarTemaAlDom(temaActual, root);
     actualizarBoton(boton, temaActual);
     guardarTemaElegido(temaActual, storage);
+    notificarCambioTema(temaActual);
   });
+
+  if (mql) {
+    const manejarCambioSistema = (prefiereOscuroAhora: boolean): void => {
+      // La elección explícita del usuario siempre gana (T2): un cambio del
+      // tema del sistema con el navegador abierto no la pisa.
+      if (leerTemaGuardado(storage) !== null) return;
+      temaActual = prefiereOscuroAhora ? "dark" : "light";
+      aplicarTemaAlDom(temaActual, root);
+      actualizarBoton(boton, temaActual);
+      notificarCambioTema(temaActual);
+    };
+    try {
+      mql.addEventListener("change", (ev) => manejarCambioSistema(ev.matches));
+    } catch {
+      // Safari viejo: sin addEventListener en MediaQueryList. Sin listener,
+      // la página sigue funcionando con el tema resuelto al cargar.
+    }
+  }
 }

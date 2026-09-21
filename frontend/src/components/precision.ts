@@ -6,6 +6,8 @@ import { getPronosticoHistorico } from "../api/pronostico";
 import type { AlturaDiaria, ErrorPronostico, HistoricoDia } from "../api/types";
 import { formatMetros, parseFechaLocal } from "../format";
 import { LEAD_DIAS_COMPARADO, RANGO_PRECISION_DIAS } from "../domain/dominio";
+import { PALETA, TRAZOS, fondoTrazoCss, leerVariableCss, propsTrazoUplot } from "../graficos/paleta";
+import { onTemaCambia } from "../theme";
 
 function fechaISOLocal(fecha: Date): string {
   const y = fecha.getFullYear();
@@ -76,29 +78,34 @@ export interface PrecisionDeps {
 
 const defaultDeps: PrecisionDeps = { getAlturasDiarias, getPronosticoHistorico, getEstadisticas };
 
-function leerColor(variable: string, fallback: string, referencia: HTMLElement): string {
-  const valor = getComputedStyle(referencia).getPropertyValue(variable).trim();
-  return valor || fallback;
+const fechaEjeFormatter = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short" });
+
+function renderLeyendaPrecision(container: HTMLUListElement, colorReal: string, colorPronosticado: string): void {
+  container.innerHTML = `
+    <li><span class="grafico-leyenda-linea" style="background:${colorReal};height:${TRAZOS.alturaReal.widthPx}px"></span> Lo que midió el INA</li>
+    <li><span class="grafico-leyenda-linea" style="background:${fondoTrazoCss(colorPronosticado, TRAZOS.historico)};height:${TRAZOS.historico.widthPx}px"></span> Lo que decía el pronóstico</li>
+  `;
 }
 
-const fechaEjeFormatter = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short" });
+export interface MontajePrecision {
+  /** Desuscribe del cambio de tema y destruye la instancia de uPlot. */
+  destroy(): void;
+}
 
 /**
  * "¿Cuánto acierta el pronóstico?" (spec 007 T4): pronóstico a 3 días hecho
  * en su momento vs lo que pasó, con el error promedio en una frase. Carga
  * sus datos de forma independiente.
  */
-export function mountPrecision(container: HTMLElement, deps: PrecisionDeps = defaultDeps): void {
+export function mountPrecision(container: HTMLElement, deps: PrecisionDeps = defaultDeps): MontajePrecision {
   let instancia: uPlot | null = null;
+  let ultimaSeries: PrecisionSeries | null = null;
 
   container.innerHTML = `
     <h2>¿Cuánto acierta el pronóstico?</h2>
     <p class="precision-frase" id="precision-frase"></p>
     <div class="grafico-canvas" id="precision-canvas"></div>
-    <ul class="grafico-leyenda" aria-hidden="true">
-      <li><span class="grafico-leyenda-linea" style="--color-linea:var(--fg)"></span> Lo que midió el INA</li>
-      <li><span class="grafico-leyenda-linea grafico-leyenda-linea--punteada" style="--color-linea:var(--muted)"></span> Lo que decía el pronóstico</li>
-    </ul>
+    <ul class="grafico-leyenda" id="precision-leyenda" aria-hidden="true"></ul>
     <p class="grafico-estado" role="status" aria-live="polite"></p>
     <details class="grafico-alternativa">
       <summary>Ver como texto</summary>
@@ -108,9 +115,66 @@ export function mountPrecision(container: HTMLElement, deps: PrecisionDeps = def
 
   const fraseEl = container.querySelector<HTMLParagraphElement>("#precision-frase");
   const canvasEl = container.querySelector<HTMLDivElement>("#precision-canvas");
+  const leyendaEl = container.querySelector<HTMLUListElement>("#precision-leyenda");
   const estadoEl = container.querySelector<HTMLParagraphElement>(".grafico-estado");
   const resumenEl = container.querySelector<HTMLParagraphElement>(".grafico-resumen");
-  if (!fraseEl || !canvasEl || !estadoEl || !resumenEl) return;
+  if (!fraseEl || !canvasEl || !leyendaEl || !estadoEl || !resumenEl) return { destroy(): void {} };
+
+  /** (Re)dibuja a partir de la serie ya calculada, releyendo la paleta en cada llamada (reactividad al tema). */
+  function dibujar(series: PrecisionSeries): void {
+    if (!canvasEl || !leyendaEl) return;
+    const colorReal = leerVariableCss("--graf-altura-real", PALETA.light.alturaReal, container);
+    const colorPronostico = leerVariableCss("--graf-historico", PALETA.light.historico, container);
+    const colorEje = leerVariableCss("--graf-eje", PALETA.light.ejeTexto, container);
+    const colorGrilla = leerVariableCss("--graf-grilla", PALETA.light.grilla, container);
+
+    renderLeyendaPrecision(leyendaEl, colorReal, colorPronostico);
+
+    instancia?.destroy();
+    canvasEl.replaceChildren();
+    const width = Math.max(280, canvasEl.clientWidth || container.clientWidth || 320);
+    instancia = new uPlot(
+      {
+        width,
+        height: 220,
+        scales: { x: { time: true } },
+        series: [
+          {},
+          { label: "Altura real", stroke: colorReal, width: TRAZOS.alturaReal.widthPx, points: { show: false } },
+          {
+            label: `Pronóstico a ${LEAD_DIAS_COMPARADO} días (histórico)`,
+            stroke: colorPronostico,
+            points: { show: false },
+            ...propsTrazoUplot(TRAZOS.historico),
+          },
+        ],
+        // L4/M4 (spec 008) + paleta v3: ejes >= 13 px, rol dedicado
+        // `--graf-eje`/`--graf-grilla` (contraste AA en los dos temas) y
+        // menos marcas en el eje X a 360 px.
+        axes: [
+          {
+            font: "13px system-ui, sans-serif",
+            stroke: colorEje,
+            grid: { stroke: colorGrilla, width: 1 },
+            ticks: { stroke: colorGrilla, width: 1 },
+            space: width < 400 ? 70 : 50,
+            values: (_u, splits) => splits.map((s) => fechaEjeFormatter.format(new Date(s * 1000))),
+          },
+          {
+            label: "Altura (metros)",
+            font: "13px system-ui, sans-serif",
+            labelFont: "13px system-ui, sans-serif",
+            stroke: colorEje,
+            grid: { stroke: colorGrilla, width: 1 },
+            ticks: { stroke: colorGrilla, width: 1 },
+          },
+        ],
+        legend: { show: false },
+      },
+      [series.x, series.real, series.pronosticado],
+      canvasEl,
+    );
+  }
 
   async function cargar(): Promise<void> {
     if (!fraseEl || !canvasEl || !estadoEl || !resumenEl) return;
@@ -137,49 +201,27 @@ export function mountPrecision(container: HTMLElement, deps: PrecisionDeps = def
 
     const series = buildPrecisionSeries(alturasResult.data, historicoResult.data);
     resumenEl.textContent = buildResumenTextoPrecision(series);
-    const colorReal = leerColor("--fg", "#1c2430", container);
-    const colorPronostico = leerColor("--muted", "#7a4fa3", container);
-
-    instancia?.destroy();
-    canvasEl.replaceChildren();
-    const width = Math.max(280, canvasEl.clientWidth || container.clientWidth || 320);
-    instancia = new uPlot(
-      {
-        width,
-        height: 220,
-        scales: { x: { time: true } },
-        series: [
-          {},
-          { label: "Altura real", stroke: colorReal, width: 2, points: { show: false } },
-          {
-            label: `Pronóstico a ${LEAD_DIAS_COMPARADO} días (histórico)`,
-            stroke: colorPronostico,
-            width: 1.5,
-            dash: [5, 4],
-            points: { show: false },
-          },
-        ],
-        // L4/M4 (spec 008): ejes >= 13 px, contraste AA (--fg) y menos marcas
-        // en el eje X a 360 px.
-        axes: [
-          {
-            font: "13px system-ui, sans-serif",
-            stroke: colorReal,
-            space: width < 400 ? 70 : 50,
-            values: (_u, splits) => splits.map((s) => fechaEjeFormatter.format(new Date(s * 1000))),
-          },
-          { label: "Altura (metros)", font: "13px system-ui, sans-serif", labelFont: "13px system-ui, sans-serif", stroke: colorReal },
-        ],
-        legend: { show: false },
-      },
-      [series.x, series.real, series.pronosticado],
-      canvasEl,
-    );
+    ultimaSeries = series;
+    dibujar(series);
   }
 
-  window.addEventListener("resize", () => {
-    if (instancia && canvasEl) instancia.setSize({ width: Math.max(280, canvasEl.clientWidth), height: 220 });
+  const desuscribirTema = onTemaCambia(() => {
+    if (ultimaSeries) dibujar(ultimaSeries);
   });
 
+  function manejarResize(): void {
+    if (instancia && canvasEl) instancia.setSize({ width: Math.max(280, canvasEl.clientWidth), height: 220 });
+  }
+  window.addEventListener("resize", manejarResize);
+
   void cargar();
+
+  return {
+    destroy(): void {
+      desuscribirTema();
+      window.removeEventListener("resize", manejarResize);
+      instancia?.destroy();
+      instancia = null;
+    },
+  };
 }

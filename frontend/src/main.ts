@@ -18,6 +18,12 @@ import { mountDetalleTecnico } from "./components/detalleTecnico";
 import { mountFaq } from "./components/faq";
 import { renderPie } from "./components/pie";
 import { mountThemeToggle } from "./theme";
+import { montarEstilosPaleta } from "./graficos/paleta";
+
+// Paleta de gráficos v3 (spec 008, seguimiento): inyecta las custom
+// properties `--graf-*` antes de montar ningún gráfico, para que el primer
+// render ya las encuentre.
+montarEstilosPaleta();
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("#app not found");

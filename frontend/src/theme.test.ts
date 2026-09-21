@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { alternarTema, guardarTemaElegido, leerTemaGuardado, resolverTemaInicial, type StorageLike } from "./theme";
+import {
+  alternarTema,
+  guardarTemaElegido,
+  leerTemaGuardado,
+  notificarCambioTema,
+  onTemaCambia,
+  resolverTemaInicial,
+  type StorageLike,
+} from "./theme";
 
 function fakeStorage(inicial: Record<string, string> = {}): StorageLike {
   const datos = { ...inicial };
@@ -74,5 +82,37 @@ describe("alternarTema", () => {
   it("invierte el tema", () => {
     expect(alternarTema("dark")).toBe("light");
     expect(alternarTema("light")).toBe("dark");
+  });
+});
+
+describe("onTemaCambia / notificarCambioTema", () => {
+  it("notifica a todos los suscriptos con el tema nuevo", () => {
+    const recibidos: string[] = [];
+    const desuscribir1 = onTemaCambia((tema) => recibidos.push(`uno:${tema}`));
+    const desuscribir2 = onTemaCambia((tema) => recibidos.push(`dos:${tema}`));
+
+    notificarCambioTema("dark");
+
+    expect(recibidos).toEqual(["uno:dark", "dos:dark"]);
+    desuscribir1();
+    desuscribir2();
+  });
+
+  it("la función devuelta desuscribe: ese oyente no recibe más notificaciones (sin memory leaks)", () => {
+    const recibidos: string[] = [];
+    const desuscribir = onTemaCambia((tema) => recibidos.push(tema));
+
+    desuscribir();
+    notificarCambioTema("light");
+
+    expect(recibidos).toEqual([]);
+  });
+
+  it("desuscribir dos veces no lanza", () => {
+    const desuscribir = onTemaCambia(() => {});
+    expect(() => {
+      desuscribir();
+      desuscribir();
+    }).not.toThrow();
   });
 });
