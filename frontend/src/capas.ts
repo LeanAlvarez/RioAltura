@@ -37,6 +37,14 @@ export interface CapaIndex {
   paso: { hasta_1050: number; sobre_1050: number };
   clases: ClaseInfo[];
   capas: CapaEntry[];
+  /**
+   * Marca MOP de "Crecida Máxima Observada" (informe INA-CARU 2019), la
+   * agrega `geoprocessing/` (spec 008, en paralelo). Opcional para no romper
+   * índices/fixtures viejos que todavía no la traen: por eso nunca se
+   * hardcodea un "10,00" en la UI (CLAUDE.md §5) — si no está, simplemente no
+   * se dibuja la marca (ver `components/superficieAfectada.ts`, G5).
+   */
+  crecida_maxima_observada_m?: number;
 }
 
 /**
@@ -124,7 +132,8 @@ export function isCapaIndex(value: unknown): value is CapaIndex {
     value.clases.every(isClaseInfo) &&
     Array.isArray(value.capas) &&
     value.capas.length > 0 &&
-    value.capas.every(isCapaEntry)
+    value.capas.every(isCapaEntry) &&
+    (value.crecida_maxima_observada_m === undefined || typeof value.crecida_maxima_observada_m === "number")
   );
 }
 
@@ -274,6 +283,30 @@ export function textoMostrando(mostrado: number, requested: number): string | nu
   return `mostrando ${formatAltura(mostrado)}`;
 }
 
+/**
+ * Pure: el texto siempre visible "Mostrando: ..." del mapa (defecto G3,
+ * revisión de diseño). Antes decía "si el río llega a 4,25 m — hoy está en
+ * 4,29 m" sin explicar por qué esos dos números tan parecidos no coinciden —
+ * se leía como un error. La razón: las capas van de 0,25 en 0,25 m
+ * (`index.json.paso`), así que lo que se dibuja es la altura disponible más
+ * cercana a la pedida, no la exacta (`vista.textos.mostrando` es no-null
+ * justo en ese caso). Cuando no hubo que redondear, sigue el texto
+ * original. No DOM (ver `map.ts`, que solo la usa para pintar un `<p>`).
+ */
+export function describeMostrando(vista: VistaMapa): string {
+  const altura = vista.textos.altura;
+  if (altura === null) return "Elegí un escenario para ver las zonas inundables.";
+  const actual = vista.textos.actual;
+
+  if (vista.textos.mostrando !== null) {
+    const base = `El mapa muestra la altura más parecida que tenemos (${altura}).`;
+    return actual === null ? base : `${base} Hoy el río está en ${actual}.`;
+  }
+  if (actual === null) return `Mostrando: si el río llega a ${altura}.`;
+  if (actual === altura) return `Mostrando la altura de hoy: ${altura}.`;
+  return `Mostrando: si el río llega a ${altura} — hoy está en ${actual}.`;
+}
+
 // --- Scenario / container state machine ---------------------------------------
 
 export interface Escenario {
@@ -356,7 +389,9 @@ export function createEstadoMapa(index: CapaIndex): EstadoMapa {
       },
       {
         id: "pronostico",
-        etiqueta: "Pronóstico máx.",
+        // Jerga (revisión de diseño): "máx." es una abreviatura técnica que
+        // no dice a qué se refiere sin contexto.
+        etiqueta: "Lo más alto del pronóstico",
         h: nivelPronosticado,
         habilitado: nivelPronosticado !== null,
       },

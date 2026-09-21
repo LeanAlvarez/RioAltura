@@ -7,6 +7,7 @@ import {
   CapaIndexError,
   createCapaCache,
   createEstadoMapa,
+  describeMostrando,
   fetchCapaIndex,
   formatAltura,
   formatCota,
@@ -259,7 +260,7 @@ describe("createEstadoMapa", () => {
     const pronostico = vista?.escenarios.find((e) => e.id === "pronostico");
     expect(pronostico).toEqual({
       id: "pronostico",
-      etiqueta: "Pronóstico máx.",
+      etiqueta: "Lo más alto del pronóstico",
       h: 6.5,
       habilitado: true,
     });
@@ -318,7 +319,7 @@ describe("createEstadoMapa", () => {
     expect(escenarios[0]).toEqual({ id: "hoy", etiqueta: "Hoy", h: null, habilitado: false });
     expect(escenarios[1]).toEqual({
       id: "pronostico",
-      etiqueta: "Pronóstico máx.",
+      etiqueta: "Lo más alto del pronóstico",
       h: null,
       habilitado: false,
     });
@@ -343,5 +344,59 @@ describe("createEstadoMapa", () => {
 
     estado.seleccionar(2, { porUsuario: true });
     expect(ultimaVista?.textos.fueraDeRango).toBeNull();
+  });
+});
+
+describe("describeMostrando", () => {
+  function vistaConTextos(textos: Partial<VistaMapa["textos"]>): VistaMapa {
+    return {
+      seleccion: 5,
+      resuelto: null,
+      escenarios: [],
+      textos: {
+        altura: null,
+        cota: null,
+        hectareas: null,
+        mostrando: null,
+        fueraDeRango: null,
+        medicion: null,
+        sinSeleccion: null,
+        actual: null,
+        ...textos,
+      },
+    };
+  }
+
+  it("sin selección, pide elegir un escenario", () => {
+    expect(describeMostrando(vistaConTextos({}))).toBe("Elegí un escenario para ver las zonas inundables.");
+  });
+
+  it("G3: cuando la capa mostrada es redondeada, explica la diferencia con la altura de hoy", () => {
+    // Bug real (revisión de diseño): "si el río llega a 4,25 m — hoy está en
+    // 4,29 m" no explicaba por qué esos números tan parecidos no coincidían.
+    const texto = describeMostrando(
+      vistaConTextos({ altura: "4,25 m", mostrando: "mostrando 4,25 m", actual: "4,29 m" }),
+    );
+    expect(texto).toBe("El mapa muestra la altura más parecida que tenemos (4,25 m). Hoy el río está en 4,29 m.");
+  });
+
+  it("redondeada sin medición de hoy: no inventa un dato que no llegó", () => {
+    const texto = describeMostrando(vistaConTextos({ altura: "4,25 m", mostrando: "mostrando 4,25 m", actual: null }));
+    expect(texto).toBe("El mapa muestra la altura más parecida que tenemos (4,25 m).");
+  });
+
+  it("sin redondeo y distinta de hoy: mantiene el texto original de escenario", () => {
+    const texto = describeMostrando(vistaConTextos({ altura: "7,90 m", actual: "4,29 m" }));
+    expect(texto).toBe("Mostrando: si el río llega a 7,90 m — hoy está en 4,29 m.");
+  });
+
+  it("sin redondeo e igual a la de hoy: no repite el mismo número dos veces", () => {
+    const texto = describeMostrando(vistaConTextos({ altura: "4,25 m", actual: "4,25 m" }));
+    expect(texto).toBe("Mostrando la altura de hoy: 4,25 m.");
+  });
+
+  it("sin redondeo y sin medición de hoy todavía", () => {
+    const texto = describeMostrando(vistaConTextos({ altura: "7,90 m" }));
+    expect(texto).toBe("Mostrando: si el río llega a 7,90 m.");
   });
 });
