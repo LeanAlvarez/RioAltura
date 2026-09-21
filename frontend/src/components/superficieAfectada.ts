@@ -1,4 +1,4 @@
-import { fetchCapaIndex, formatAltura, formatHectareas, resolveNivel, type CapaIndex } from "../capas";
+import { fetchCapaIndex, formatAltura, formatHectareas, resolveNivel, SELECCION_INICIAL, type CapaIndex } from "../capas";
 
 export interface PuntoCurva {
   h: number;
@@ -86,7 +86,7 @@ export function mountSuperficieAfectada(container: HTMLElement, deps: Superficie
           <polyline points="${polylinePoints}" class="superficie-curva-linea" />
           <circle class="superficie-curva-punto" r="4" cx="0" cy="0" />
         </svg>
-        <input type="range" class="superficie-slider" min="${String(index.nivel_min)}" max="${String(index.nivel_max)}" step="${String(index.paso.hasta_1050)}" aria-label="Altura del puerto" />
+        <input type="range" class="superficie-slider" min="${String(index.nivel_min)}" max="${String(index.nivel_max)}" step="${String(index.paso.hasta_1050)}" value="${String(SELECCION_INICIAL)}" aria-label="Altura del puerto" />
         <p class="superficie-texto"></p>
       `;
 

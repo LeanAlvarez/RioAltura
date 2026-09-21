@@ -88,6 +88,26 @@ declare global {
 // below as module-level functions delegating to this instance.
 let ultimaInstancia: MapaInundacion | null = null;
 
+// Selection subscribers live at module scope, not per instance: the hectares
+// card (spec 007 T7) subscribes through the module as soon as it mounts, which
+// happens before `createMap` has run. A per-instance registry silently dropped
+// those listeners, so the map never pushed its changes to the curve.
+const nivelListeners = new Set<(h: number) => void>();
+// Last selection pushed, replayed to late subscribers so both controls agree
+// from the first paint instead of starting on different heights.
+let ultimaSeleccion: number | null = null;
+
+function emitirSeleccion(h: number): void {
+  ultimaSeleccion = h;
+  for (const listener of nivelListeners) listener(h);
+}
+
+function suscribirSeleccion(listener: (h: number) => void): () => void {
+  nivelListeners.add(listener);
+  if (ultimaSeleccion !== null) listener(ultimaSeleccion);
+  return () => nivelListeners.delete(listener);
+}
+
 interface Panel {
   render(vista: VistaMapa): void;
 }
@@ -238,7 +258,6 @@ export function createMap(container: HTMLElement): MapaInundacion {
   let pendienteActual: number | null = null;
   let pendientePronosticado: number | null = null;
   let pendienteSeleccion: number | null = null;
-  const nivelListeners = new Set<(h: number) => void>();
 
   // Until (or unless) index.json loads, the public API is a no-op that just
   // remembers the last requested values — spec 005 can call it unconditionally.
@@ -274,7 +293,7 @@ export function createMap(container: HTMLElement): MapaInundacion {
 
       estado.subscribe((vista) => {
         panel.render(vista);
-        for (const listener of nivelListeners) listener(vista.seleccion);
+        emitirSeleccion(vista.seleccion);
         const miSolicitud = ++solicitudId;
         cache
           .get(vista.resuelto.entry)
@@ -327,12 +346,14 @@ export function createMap(container: HTMLElement): MapaInundacion {
       api.seleccionar(h);
     },
     onSeleccionCambia(listener) {
-      nivelListeners.add(listener);
-      return () => nivelListeners.delete(listener);
+      return suscribirSeleccion(listener);
     },
     destroy() {
       destroyed = true;
-      if (ultimaInstancia === instancia) ultimaInstancia = null;
+      if (ultimaInstancia === instancia) {
+        ultimaInstancia = null;
+        ultimaSeleccion = null;
+      }
       if (window.mapaInundacion === instancia) delete window.mapaInundacion;
       map.remove();
     },
@@ -358,5 +379,5 @@ export function seleccionar(h: number): void {
 }
 
 export function onSeleccionCambia(listener: (h: number) => void): () => void {
-  return ultimaInstancia?.onSeleccionCambia(listener) ?? (() => {});
+  return suscribirSeleccion(listener);
 }
