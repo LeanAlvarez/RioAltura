@@ -118,7 +118,7 @@ pnpm -C frontend build && pnpm -C frontend test
 - **OpenAPI 3.1**: el contrato usa `type: [number, "null"]` para `tendencia_24h_m`; y el `detail` de los 422 de validación de FastAPI es una lista, no un string, por eso `ErrorResponse.detail` acepta ambos.
 - **Para la spec 003**: `backend/alembic/env.py` ahora importa `Base` desde `app.models`. Los modelos nuevos deben registrarse ahí (importarlos en `app/models/__init__.py`) y la migración siguiente debe partir de `0002`.
 - **Alembic y `caplog`**: al correr `alembic upgrade` desde un test (el de Postgres real), `fileConfig(alembic.ini)` deshabilitaba los loggers ya creados y los tests de logging del worker que corrían después no capturaban nada. Solo se veía con `TEST_DATABASE_URL` seteado (CI). Corregido con `disable_existing_loggers=False` en `backend/alembic/env.py`.
-- **CI del frontend ya fallaba en `main`** desde el PR #1: `pnpm/action-setup@v4` exige la versión de pnpm (`packageManager` en `frontend/package.json` o `version` en el action). No se tocó porque está fuera de esta spec y de lo autorizado; conviene un `chore/ci-pnpm-version` aparte.
+- **CI del frontend ya fallaba en `main`** desde el PR #1: `pnpm/action-setup@v4` exige la versión de pnpm (`packageManager` en `frontend/package.json` o `version` en el action). Resuelto aparte en el PR #3 (`chore/ci-pnpm-version`): el action lee `package.json` de la raíz, así que se le indicó `package_json_file: frontend/package.json`. Esta rama se rebaseó sobre ese `main`.
 - **Warnings de pytest** (`StarletteDeprecationWarning` sobre httpx/httpx2 y `anyio.abc.BlockingPortal`): vienen de starlette/fastapi, no de este código. Se resuelven al actualizar esas librerías.
 
 ## Resumen final
