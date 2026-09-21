@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config.settings import get_settings
 from app.logging_config import configure_logging
-from app.routers import alturas, health
+from app.routers import alturas, health, pronostico
 
 
 def create_app() -> FastAPI:
@@ -19,6 +19,7 @@ def create_app() -> FastAPI:
     app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET"])
     app.include_router(health.router)
     app.include_router(alturas.router)
+    app.include_router(pronostico.router)
     return app
 
 
