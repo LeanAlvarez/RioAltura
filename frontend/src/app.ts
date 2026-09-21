@@ -19,14 +19,17 @@ export async function loadDashboardData(fetchFn?: typeof fetch): Promise<Dashboa
   return { altura, pronostico };
 }
 
-/** El nivel máximo estimado entre los próximos días, para pasarle al mapa (spec 006). */
+/**
+ * El nivel máximo estimado (anclado, spec 007 M3) entre los próximos días,
+ * para pasarle al mapa (spec 006).
+ */
 export function nivelMaximoEstimado(pronostico: FetchResult<Pronostico>): number | null {
   if (pronostico.kind !== "ok") return null;
   const candidatos = pronostico.data.dias.filter((d) => d.lead_dias >= 1);
   const pool = candidatos.length > 0 ? candidatos : pronostico.data.dias;
   const primero = pool[0];
   if (!primero) return null;
-  let max = primero.altura_est_m;
-  for (const dia of pool) if (dia.altura_est_m > max) max = dia.altura_est_m;
+  let max = primero.altura_anclada_m;
+  for (const dia of pool) if (dia.altura_anclada_m > max) max = dia.altura_anclada_m;
   return max;
 }

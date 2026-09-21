@@ -28,3 +28,17 @@ export const RANGO_ESTIMACION_M = 1.0;
 
 /** Mirror de `CAUDAL_MAX_CALIBRADO_M3S` en `backend/app/config/dominio.py`. */
 export const CAUDAL_MAX_CALIBRADO_M3S = 15_000;
+
+/**
+ * Mirror de `HORIZONTE_ANCLAJE_DIAS` en `backend/app/config/dominio.py` (spec 007, C2):
+ * el sesgo del anclaje decae linealmente hasta 0 en este día. Solo se usa en
+ * `mocks/data.ts` para generar fixtures realistas; el backend calcula
+ * `altura_anclada_*` en las respuestas reales.
+ */
+export const HORIZONTE_ANCLAJE_DIAS = 7;
+
+/** Mirror del `lead` fijo (3 días) que usa `/estadisticas.error_pronostico` (spec 007 T4). */
+export const LEAD_DIAS_COMPARADO = 3;
+
+/** Ventana (en días) que se pide a `/pronostico/historico` y `/alturas` para la tarjeta "¿Cuánto acierta el pronóstico?" (spec 007 T4). */
+export const RANGO_PRECISION_DIAS = 90;

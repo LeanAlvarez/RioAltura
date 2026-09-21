@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { Anclaje } from "./api/types";
 import { loadDashboardData, nivelMaximoEstimado } from "./app";
 
 const ULTIMA_ALTURA = {
@@ -7,6 +8,14 @@ const ULTIMA_ALTURA = {
   fuente: "ina",
   tendencia_24h_m: 0.12,
   estado: "normal",
+};
+
+const SIN_ANCLAJE: Anclaje = {
+  aplicado: false,
+  sesgo_m: null,
+  altura_real_m: null,
+  fecha_referencia: null,
+  motivo: "No hay altura real disponible para hoy",
 };
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -34,6 +43,7 @@ describe("loadDashboardData", () => {
       gauge_id: "hybas_6121320620",
       dias: [],
       aviso: { nivel: "sin_aviso", umbral_m3s: null, primer_dia: null, caudal_max_m3s: null },
+      anclaje: SIN_ANCLAJE,
     };
     const fetchFn: typeof fetch = async (input) => {
       const url = String(input);
@@ -69,6 +79,9 @@ describe("nivelMaximoEstimado", () => {
             altura_est_m: 99,
             altura_min_m: 98,
             altura_max_m: 100,
+            altura_anclada_m: 99,
+            altura_anclada_min_m: 98,
+            altura_anclada_max_m: 100,
             extrapolado: true,
           },
           {
@@ -78,6 +91,9 @@ describe("nivelMaximoEstimado", () => {
             altura_est_m: 5.9,
             altura_min_m: 4.9,
             altura_max_m: 6.9,
+            altura_anclada_m: 6.4,
+            altura_anclada_min_m: 5.4,
+            altura_anclada_max_m: 7.4,
             extrapolado: false,
           },
           {
@@ -87,12 +103,23 @@ describe("nivelMaximoEstimado", () => {
             altura_est_m: 6.3,
             altura_min_m: 5.3,
             altura_max_m: 7.3,
+            altura_anclada_m: 6.6,
+            altura_anclada_min_m: 5.6,
+            altura_anclada_max_m: 7.6,
             extrapolado: false,
           },
         ],
         aviso: { nivel: "sin_aviso", umbral_m3s: null, primer_dia: null, caudal_max_m3s: null },
+        anclaje: {
+          aplicado: true,
+          sesgo_m: 0.5,
+          altura_real_m: 6.4,
+          fecha_referencia: "2026-09-21",
+          motivo: null,
+        },
       },
     });
-    expect(nivel).toBe(6.3);
+    // Anclado: la altura_anclada_m máxima entre lead >= 1 es la del 23/9 (6,6), no la altura_est_m cruda (6,3).
+    expect(nivel).toBe(6.6);
   });
 });

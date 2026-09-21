@@ -1,4 +1,11 @@
-import { mockAlturasDiarias, mockPronostico, mockPronosticoHistorico, mockUltimaAltura } from "./data";
+import {
+  mockAlturasDiarias,
+  mockEstadisticas,
+  mockPronostico,
+  mockPronosticoAguasArriba,
+  mockPronosticoHistorico,
+  mockUltimaAltura,
+} from "./data";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -16,6 +23,10 @@ export const mockFetch: typeof fetch = async (input) => {
   const url = new URL(String(input), "http://mock.local");
   const { pathname, searchParams } = url;
   const ahora = new Date();
+
+  if (pathname.endsWith("/health")) {
+    return jsonResponse({ status: "ok", db: "ok" });
+  }
 
   if (pathname.endsWith("/alturas/ultima")) {
     return jsonResponse(mockUltimaAltura(ahora));
@@ -35,8 +46,16 @@ export const mockFetch: typeof fetch = async (input) => {
     return jsonResponse(mockPronosticoHistorico(desde, Number(lead), ahora));
   }
 
+  if (pathname.endsWith("/pronostico/aguas-arriba")) {
+    return jsonResponse(mockPronosticoAguasArriba(ahora));
+  }
+
   if (pathname.endsWith("/pronostico")) {
     return jsonResponse(mockPronostico(ahora));
+  }
+
+  if (pathname.endsWith("/estadisticas")) {
+    return jsonResponse(mockEstadisticas(ahora));
   }
 
   return jsonResponse({ detail: "No encontrado (mock)" }, 404);

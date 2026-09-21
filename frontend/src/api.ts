@@ -1,3 +1,5 @@
+import { defaultFetch } from "./api/fetch-default";
+
 export interface HealthResponse {
   status: "ok";
   db: "ok" | "error";
@@ -26,7 +28,7 @@ export function isHealthResponse(value: unknown): value is HealthResponse {
 }
 
 export async function fetchHealth(
-  fetchFn: typeof fetch = fetch,
+  fetchFn: typeof fetch = defaultFetch,
   baseUrl: string = API_URL,
   now: () => Date = () => new Date(),
 ): Promise<HealthState> {
