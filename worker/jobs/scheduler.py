@@ -17,6 +17,11 @@ from jobs.google import (
     job_actualizar_pronosticos,
 )
 from jobs.heartbeat import HEARTBEAT_INTERVAL_SECONDS, heartbeat
+from jobs.salto_grande import (
+    SALTO_GRANDE_FIRST_RUN_DELAY_SECONDS,
+    SALTO_GRANDE_INTERVAL_SECONDS,
+    job_actualizar_salto_grande,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +53,15 @@ def build_scheduler() -> BlockingScheduler:
         id="pronosticos",
         # Same rationale as "alturas": never touch Google right at startup.
         next_run_time=datetime.now(UTC) + timedelta(seconds=PRONOSTICOS_FIRST_RUN_DELAY_SECONDS),
+    )
+    scheduler.add_job(
+        job_actualizar_salto_grande,
+        "interval",
+        seconds=SALTO_GRANDE_INTERVAL_SECONDS,
+        id="salto_grande",
+        # Daily job, not hourly: the CTM bulletin is only published once a
+        # day (spec 012). Same startup-delay rationale as "alturas"/"pronosticos".
+        next_run_time=datetime.now(UTC) + timedelta(seconds=SALTO_GRANDE_FIRST_RUN_DELAY_SECONDS),
     )
     return scheduler
 

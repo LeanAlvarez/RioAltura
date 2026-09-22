@@ -118,26 +118,96 @@ pública gratuita sin ganar nada (§6).
 
 ## Criterios de aceptación
 
-- [ ] Los cuatro PDFs se parsean y persisten: caudal erogado, aporte, nivel de embalse, estado del
+- [x] Los cuatro PDFs se parsean y persisten: caudal erogado, aporte, nivel de embalse, estado del
       vertedero, caudales de la cascada, lluvia observada y pronosticada por subcuenca.
-- [ ] Si un PDF cambia de formato, ese job registra el fallo, **los otros tres siguen**, y la app
+- [x] Si un PDF cambia de formato, ese job registra el fallo, **los otros tres siguen**, y la app
       muestra lo último conocido con su fecha.
-- [ ] Valores fuera de rango se descartan y se registran.
-- [ ] La tarjeta cuenta la historia en lenguaje llano; `m³/s` aparece como detalle secundario (§7).
-- [ ] La proyección del evacuado se muestra **citada como proyección de CTM**, no como nuestra.
-- [ ] **No se deriva ninguna altura de Colón** de estos datos.
-- [ ] Atribución a CTM Salto Grande visible (§7), y fecha del comunicado siempre a la vista (§6).
-- [ ] Tests con fixtures grabadas de los cuatro PDFs; ninguno llama a la fuente (§6).
-- [ ] `ruff`, `pytest`, `pnpm build` y `pnpm test` pasan.
+- [x] Valores fuera de rango se descartan y se registran.
+- [x] La tarjeta cuenta la historia en lenguaje llano; `m³/s` aparece como detalle secundario (§7).
+- [x] La proyección del evacuado se muestra **citada como proyección de CTM**, no como nuestra.
+- [x] **No se deriva ninguna altura de Colón** de estos datos.
+- [x] Atribución a CTM Salto Grande visible (§7), y fecha del comunicado siempre a la vista (§6).
+- [x] Tests con fixtures grabadas de los cuatro PDFs; ninguno llama a la fuente (§6).
+- [x] `ruff`, `pytest`, `pnpm build` y `pnpm test` pasan.
 
 ## Cómo verificar
 
-(La completa el agente.)
+```bash
+cd /Users/leandroalvarez/orca/workspaces/RioAltura/salto
+set -a; . ./.env.local; set +a
+docker compose up -d db
+uv run alembic upgrade head          # aplica 0005_salto_grande (probado también con downgrade -1 + upgrade)
+uv run ruff check . && uv run ruff format --check . && uv run pytest -q
+pnpm -C frontend install
+pnpm -C frontend exec tsc --noEmit && pnpm -C frontend build && pnpm -C frontend test
+```
+
+Resultado real (2026-09-22):
+
+- `alembic upgrade head`: aplica `0001` → `0005` sin errores contra Postgres real del worktree; se
+  probó además `alembic downgrade -1` + `upgrade head` (rollback limpio de la tabla nueva).
+- `ruff check .`: **All checks passed!**
+- `ruff format --check .`: **96 files already formatted**
+- `pytest -q`: **229 passed, 4 skipped, 3 deselected** (los 4 skipped son tests `*_postgres.py`
+  preexistentes que requieren `TEST_DATABASE_URL`, no relacionados con esta spec).
+- `pnpm exec tsc --noEmit`: sin salida (sin errores).
+- `pnpm build`: **✓ built in ~1.3s**.
+- `pnpm test`: **21 test files, 234 tests passed** (17 nuevos de `saltoGrande.test.ts`).
+- Verificación visual: `pnpm dev` con `VITE_USE_MOCKS=true` + Chrome headless (desktop 1400px y
+  mobile 360px reales, vía `Emulation.setDeviceMetricsOverride`). La tarjeta "Salto Grande" no deja
+  huecos en la grilla, no tiene overflow horizontal a 360px (`scrollWidth === innerWidth`, 0px de
+  overflow en la tarjeta), y el texto de la proyección se ve citado con atribución a CTM.
+
+Job contra la fuente real (una vez, no en tests):
+
+```bash
+uv run pytest -q -m live worker/tests/test_live.py -k salto_grande -s
+```
+
+```
+comunicado: ComunicadoIn(fecha=2026-09-22, aporte_m3s=7553.0, evacuado_m3s=7821.0,
+  nivel_embalse_m=34.81, estado_vertedero='Cerrado', texto_proyeccion='Hasta la hora 15:00 de
+  mañana, el caudal medio diario evacuado variará entre 8.000 y 7.000 m³/s. Cotas máxima y mínima
+  referidas al puerto de Concordia: 7,00 y 5,30 metros, respectivamente. Cotas máxima y mínima
+  referidas al puerto de Salto: 7,20 y 5,50 metros, respectivamente. El nivel del embalse tenderá a
+  34,50 m.')
+caudales_cascada: 36 filas   (9 estaciones × 4 fechas)
+lluvia_observada: 56 filas   (7 subcuencas × 8 días)
+lluvia_pronostico: 49 filas  (7 subcuencas × 7 días)
+1 passed
+```
+
+Coincide exactamente con los valores citados en esta spec.
 
 ## Hallazgos
 
-(La completa el agente.)
+- **Bug real detectado por captura visual, no por los tests**: la primera versión de "hace N días"
+  (lluvia observada) usaba `formatHaceTiempo` (pensada para instantes reales, "hace 15 minutos"),
+  comparando una fecha sin hora (medianoche) contra el reloj real. A la tarde eso redondeaba "hace 2
+  días" a "hace 3 días" — el test unitario no lo detectó porque su `ahora` fijo (10:00) daba la
+  cuenta correcta por casualidad. Se agregó `diasCalendarioDesde` (diferencia de días de calendario,
+  ignorando la hora de ambos lados) y quedó reproducido en el screenshot final: "Llovió 58 mm río
+  arriba hace 2 días."
+- Los tests `test_alturas_postgres.py`/`test_pronostico_postgres.py` ya se saltan sin
+  `TEST_DATABASE_URL` configurada (preexistente, no agregué un equivalente para Salto Grande: mismo
+  patrón de gap que el resto de los repositorios nuevos hasta que se calibre esa infraestructura).
+  Los tests de repositorio corren igual contra SQLite y contra Postgres real vía `alembic upgrade`
+  manual (arriba).
+- La spec pide "lo último de cada cosa" en el endpoint; interpreté eso como **datos crudos**
+  (comunicado + el anterior, caudales de la fecha más reciente, lluvia observada/pronosticada en
+  ventana), y dejé toda la construcción de frases ("soltando más/menos agua", "llovió X mm hace N
+  días") en el frontend (`deriveSaltoGrandeView`), siguiendo el patrón `derive*View + render*` que
+  pide la tarea. El backend nunca decide qué "cuenta la historia".
+- Ningún PDF real de hoy tuvo un vertedero abierto ni un formato distinto al esperado, así que la
+  ruta de "un PDF falla, los otros tres siguen" solo está probada con fixtures/mocks (tests), no
+  contra un caso real de la fuente cambiando de formato — es inherente a que hoy no hay tal caso.
 
 ## Resumen final
 
-(La completa el agente, máximo 5 líneas.)
+Los cuatro PDFs de CTM Salto Grande se parsean con `pdfplumber` (aislados entre sí, con rangos
+validados) y se persisten en 3 tablas nuevas (migración `0005`); `GET /api/salto-grande` expone lo
+último de cada una y la tarjeta arma la historia en lenguaje llano, citando la proyección como de
+CTM y sin derivar nunca una altura de Colón. `ruff`, `pytest` (229 passed), `tsc`, `pnpm build` y
+`pnpm test` (234 passed) corren limpios, la migración se probó contra Postgres real, y el job se
+probó una vez contra la fuente real con los valores exactos de la spec. Un bug real de redondeo de
+fechas ("hace 3 días" en vez de "hace 2") se detectó recién con captura visual, no con los tests.

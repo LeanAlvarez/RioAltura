@@ -115,3 +115,33 @@ export interface Estadisticas {
   mismo_dia_otros_anios: MismoDiaAnio[];
   eventos: Evento[];
 }
+
+export interface ComunicadoSaltoGrande {
+  fecha: string;
+  aporte_m3s: number;
+  evacuado_m3s: number;
+  nivel_embalse_m: number;
+  estado_vertedero: string;
+  /** Texto de proyección de CTM tal cual, nunca convertido a una altura de Colón. */
+  texto_proyeccion: string;
+}
+
+export interface CaudalCascada {
+  estacion: string;
+  fecha: string;
+  caudal_m3s: number;
+}
+
+export interface LluviaSubcuenca {
+  subcuenca: string;
+  fecha: string;
+  lluvia_mm: number;
+}
+
+export interface SaltoGrande {
+  comunicado: ComunicadoSaltoGrande | null;
+  comunicado_anterior: ComunicadoSaltoGrande | null;
+  caudales_cascada: CaudalCascada[];
+  lluvia_observada: LluviaSubcuenca[];
+  lluvia_pronostico: LluviaSubcuenca[];
+}

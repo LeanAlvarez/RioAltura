@@ -268,6 +268,65 @@ paths:
                       - { fecha: "2024-05-14", altura_m: 9.06, etiqueta: "Máximo diario registrado (INA)" }
                       - { fecha: "2025-06-18", altura_m: 7.62, etiqueta: "Crecida de referencia" }
                       - { fecha: "2026-07-09", altura_m: 4.44, etiqueta: "Costanera inundada" }
+  /salto-grande:
+    get:
+      operationId: getSaltoGrande
+      summary: Últimos datos hidrológicos de la represa de Salto Grande (CTM)
+      description: >
+        Contexto que anticipa el pronóstico (spec 012): caudal evacuado y aportado, nivel
+        del embalse, estado del vertedero y proyección de CTM a 24-36 h, caudal de la
+        cascada aguas arriba, y lluvia observada/pronosticada por subcuenca. Nunca se
+        deriva una altura de Colón a partir de estos datos (CLAUDE.md §5, §9): las cotas
+        que proyecta el comunicado son para los puertos de Concordia y Salto.
+      tags: [salto-grande]
+      responses:
+        "200":
+          description: >
+            Lo último de cada fuente disponible. Cada una se guarda de forma independiente
+            (worker/jobs/salto_grande.py), así que cualquiera puede faltar (`null` o lista
+            vacía) sin afectar a las demás.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaltoGrande"
+              examples:
+                conDatos:
+                  value:
+                    comunicado:
+                      fecha: "2026-09-22"
+                      aporte_m3s: 7553
+                      evacuado_m3s: 7821
+                      nivel_embalse_m: 34.81
+                      estado_vertedero: Cerrado
+                      texto_proyeccion: >-
+                        Hasta la hora 15:00 de mañana, el caudal medio diario evacuado
+                        variará entre 8.000 y 7.000 m³/s. Cotas máxima y mínima referidas
+                        al puerto de Concordia: 7,00 y 5,30 metros, respectivamente. Cotas
+                        máxima y mínima referidas al puerto de Salto: 7,20 y 5,50 metros,
+                        respectivamente. El nivel del embalse tenderá a 34,50 m.
+                    comunicado_anterior:
+                      fecha: "2026-09-21"
+                      aporte_m3s: 9176
+                      evacuado_m3s: 9692
+                      nivel_embalse_m: 34.88
+                      estado_vertedero: Cerrado
+                      texto_proyeccion: "..."
+                    caudales_cascada:
+                      - { estacion: Machadinho, fecha: "2026-09-22", caudal_m3s: 2441 }
+                      - { estacion: Itá, fecha: "2026-09-22", caudal_m3s: 2586 }
+                    lluvia_observada:
+                      - { subcuenca: El Soberbio, fecha: "2026-09-20", lluvia_mm: 58 }
+                    lluvia_pronostico:
+                      - { subcuenca: El Soberbio, fecha: "2026-09-27", lluvia_mm: 6 }
+        "503":
+          description: Todavía no hay ningún dato de Salto Grande guardado.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                sinDatos:
+                  value: { detail: "Todavía no hay datos de Salto Grande cargados" }
 components:
   schemas:
     HealthResponse:
@@ -572,6 +631,90 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Evento"
+    ComunicadoSaltoGrande:
+      type: object
+      required:
+        [fecha, aporte_m3s, evacuado_m3s, nivel_embalse_m, estado_vertedero, texto_proyeccion]
+      additionalProperties: false
+      properties:
+        fecha:
+          type: string
+          format: date
+          description: Fecha del comunicado diario de CTM.
+        aporte_m3s:
+          type: number
+          description: Aporte (caudal entrante) de las últimas 24 h.
+        evacuado_m3s:
+          type: number
+          description: Caudal evacuado (turbinado + vertido) a la hora indicada en el comunicado.
+        nivel_embalse_m:
+          type: number
+          description: Nivel del embalse, en metros.
+        estado_vertedero:
+          type: string
+          description: Texto tal cual del comunicado (por ejemplo "Cerrado" o "Abierto").
+        texto_proyeccion:
+          type: string
+          description: >
+            Texto de proyección de CTM a 24-36 h, citado tal cual (nunca reinterpretado como
+            pronóstico propio, CLAUDE.md §7). Incluye las cotas proyectadas para los puertos
+            de Concordia y Salto, que nunca se convierten a una altura de Colón (CLAUDE.md §5, §9).
+    CaudalCascada:
+      type: object
+      required: [estacion, fecha, caudal_m3s]
+      additionalProperties: false
+      properties:
+        estacion:
+          type: string
+          description: Estación de la cascada aguas arriba (por ejemplo "Machadinho", "Itá").
+        fecha:
+          type: string
+          format: date
+        caudal_m3s:
+          type: number
+    LluviaSubcuenca:
+      type: object
+      required: [subcuenca, fecha, lluvia_mm]
+      additionalProperties: false
+      properties:
+        subcuenca:
+          type: string
+        fecha:
+          type: string
+          format: date
+        lluvia_mm:
+          type: number
+    SaltoGrande:
+      type: object
+      required:
+        [comunicado, comunicado_anterior, caudales_cascada, lluvia_observada, lluvia_pronostico]
+      additionalProperties: false
+      properties:
+        comunicado:
+          oneOf:
+            - $ref: "#/components/schemas/ComunicadoSaltoGrande"
+            - type: "null"
+          description: Último comunicado guardado; `null` si todavía no hay ninguno.
+        comunicado_anterior:
+          oneOf:
+            - $ref: "#/components/schemas/ComunicadoSaltoGrande"
+            - type: "null"
+          description: Comunicado anterior al último, para comparar el evacuado día a día.
+        caudales_cascada:
+          type: array
+          items:
+            $ref: "#/components/schemas/CaudalCascada"
+          description: Todas las estaciones de la fecha más reciente guardada.
+        lluvia_observada:
+          type: array
+          items:
+            $ref: "#/components/schemas/LluviaSubcuenca"
+          description: Últimos ~10 días, todas las subcuencas.
+        lluvia_pronostico:
+          type: array
+          items:
+            $ref: "#/components/schemas/LluviaSubcuenca"
+          description: Pronóstico GFS a 7 días (fecha >= hoy), todas las subcuencas.
     ErrorResponse:
       type: object
       required: [detail]

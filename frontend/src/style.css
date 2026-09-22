@@ -182,6 +182,7 @@ body {
     "umbrales"
     "aguas-arriba"
     "contexto"
+    "salto-grande"
     "historial"
     "precision"
     "faq"
@@ -193,7 +194,14 @@ body {
   margin: 0 auto;
 }
 
-/* L2, 768-1279 px: dos columnas, misma lógica de agrupación que en escritorio. */
+/*
+ * L2, 768-1279 px: dos columnas, misma lógica de agrupación que en
+ * escritorio. "Salto Grande" (spec 012) entra como fila propia a ancho
+ * completo, debajo de "Contexto": no hay un tercer panel lateral natural
+ * para sumarla al grupo aguas-arriba/contexto sin desbalancear esa
+ * columna, y una fila completa evita dejar huecos en cualquier breakpoint
+ * (L3).
+ */
 @media (min-width: 768px) {
   .dashboard {
     grid-template-columns: 1fr 1fr;
@@ -207,6 +215,7 @@ body {
       "superficie superficie"
       "grafico aguas-arriba"
       "grafico contexto"
+      "salto-grande salto-grande"
       "historial precision"
       "faq faq"
       "detalle detalle";
@@ -235,6 +244,7 @@ body {
       "superficie superficie superficie"
       "grafico grafico aguas-arriba"
       "grafico grafico contexto"
+      "salto-grande salto-grande salto-grande"
       "historial historial precision"
       "faq faq faq"
       "detalle detalle detalle";
@@ -264,6 +274,9 @@ body {
 }
 #tarjeta-contexto {
   grid-area: contexto;
+}
+#tarjeta-salto-grande {
+  grid-area: salto-grande;
 }
 #tarjeta-historial {
   grid-area: historial;
@@ -475,6 +488,33 @@ body {
 .badge[data-tono="danger"] {
   background: color-mix(in srgb, var(--danger) 22%, transparent);
   color: var(--danger);
+}
+
+/* --- Tarjeta Salto Grande (spec 012) --- */
+
+.salto-grande-proyeccion {
+  margin: 0.5rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 3px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 8%, transparent);
+  border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.salto-grande-proyeccion p {
+  margin: 0 0 0.35rem;
+  font-style: italic;
+}
+
+.salto-grande-proyeccion cite {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-style: normal;
+}
+
+.salto-grande-lluvia {
+  margin: 0 0 0.5rem;
+  color: var(--fg);
 }
 
 .umbral-distancia {

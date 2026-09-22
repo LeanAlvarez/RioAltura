@@ -2,6 +2,8 @@ import type {
   AlturaDiaria,
   Anclaje,
   AvisoPronostico,
+  CaudalCascada,
+  ComunicadoSaltoGrande,
   DiaPronostico,
   ErrorPronostico,
   Estadisticas,
@@ -9,12 +11,14 @@ import type {
   Evento,
   Fuente,
   HistoricoDia,
+  LluviaSubcuenca,
   MismoDiaAnio,
   NivelAviso,
   PercentilHoy,
   Pronostico,
   PronosticoAguasArriba,
   RangoAlerta,
+  SaltoGrande,
   UltimaAltura,
 } from "./types";
 
@@ -158,6 +162,50 @@ export function isMismoDiaAnio(value: unknown): value is MismoDiaAnio {
 export function isEvento(value: unknown): value is Evento {
   if (!isRecord(value)) return false;
   return typeof value.fecha === "string" && isNumber(value.altura_m) && typeof value.etiqueta === "string";
+}
+
+export function isComunicadoSaltoGrande(value: unknown): value is ComunicadoSaltoGrande {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.fecha === "string" &&
+    isNumber(value.aporte_m3s) &&
+    isNumber(value.evacuado_m3s) &&
+    isNumber(value.nivel_embalse_m) &&
+    typeof value.estado_vertedero === "string" &&
+    typeof value.texto_proyeccion === "string"
+  );
+}
+
+function isNullableComunicadoSaltoGrande(value: unknown): value is ComunicadoSaltoGrande | null {
+  return value === null || isComunicadoSaltoGrande(value);
+}
+
+export function isCaudalCascada(value: unknown): value is CaudalCascada {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.estacion === "string" && typeof value.fecha === "string" && isNumber(value.caudal_m3s)
+  );
+}
+
+export function isLluviaSubcuenca(value: unknown): value is LluviaSubcuenca {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.subcuenca === "string" && typeof value.fecha === "string" && isNumber(value.lluvia_mm)
+  );
+}
+
+export function isSaltoGrande(value: unknown): value is SaltoGrande {
+  if (!isRecord(value)) return false;
+  return (
+    isNullableComunicadoSaltoGrande(value.comunicado) &&
+    isNullableComunicadoSaltoGrande(value.comunicado_anterior) &&
+    Array.isArray(value.caudales_cascada) &&
+    value.caudales_cascada.every(isCaudalCascada) &&
+    Array.isArray(value.lluvia_observada) &&
+    value.lluvia_observada.every(isLluviaSubcuenca) &&
+    Array.isArray(value.lluvia_pronostico) &&
+    value.lluvia_pronostico.every(isLluviaSubcuenca)
+  );
 }
 
 export function isEstadisticas(value: unknown): value is Estadisticas {

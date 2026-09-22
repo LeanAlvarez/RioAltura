@@ -4,6 +4,7 @@ import {
   mockPronostico,
   mockPronosticoAguasArriba,
   mockPronosticoHistorico,
+  mockSaltoGrande,
   mockUltimaAltura,
 } from "./data";
 
@@ -56,6 +57,10 @@ export const mockFetch: typeof fetch = async (input) => {
 
   if (pathname.endsWith("/estadisticas")) {
     return jsonResponse(mockEstadisticas(ahora));
+  }
+
+  if (pathname.endsWith("/salto-grande")) {
+    return jsonResponse(mockSaltoGrande(ahora));
   }
 
   return jsonResponse({ detail: "No encontrado (mock)" }, 404);

@@ -13,6 +13,11 @@ from jobs.google import (
     job_actualizar_pronosticos,
 )
 from jobs.heartbeat import HEARTBEAT_INTERVAL_SECONDS, heartbeat
+from jobs.salto_grande import (
+    SALTO_GRANDE_FIRST_RUN_DELAY_SECONDS,
+    SALTO_GRANDE_INTERVAL_SECONDS,
+    job_actualizar_salto_grande,
+)
 from jobs.scheduler import build_scheduler
 
 
@@ -53,6 +58,20 @@ def test_registra_el_job_pronosticos_cada_6_horas() -> None:
     # Never runs immediately: the worker process test must not touch Google.
     delay = (job.next_run_time - datetime.now(UTC)).total_seconds()
     assert 0 < delay <= PRONOSTICOS_FIRST_RUN_DELAY_SECONDS == 90
+
+
+def test_registra_el_job_salto_grande_cada_dia() -> None:
+    scheduler = build_scheduler()
+
+    job = scheduler.get_job("salto_grande")
+
+    assert job is not None
+    assert isinstance(job.trigger, IntervalTrigger)
+    assert job.trigger.interval.total_seconds() == SALTO_GRANDE_INTERVAL_SECONDS == 24 * 3600
+    assert job.func is job_actualizar_salto_grande
+    # Never runs immediately: the worker process test must not touch the real source.
+    delay = (job.next_run_time - datetime.now(UTC)).total_seconds()
+    assert 0 < delay <= SALTO_GRANDE_FIRST_RUN_DELAY_SECONDS == 150
 
 
 def test_heartbeat_solo_loguea(caplog) -> None:

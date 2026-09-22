@@ -41,6 +41,11 @@ export function formatCaudal(valueM3s: number): string {
   return `${caudalFormatter.format(valueM3s)} m³/s`;
 }
 
+/** "58 mm" */
+export function formatMilimetros(valueMm: number): string {
+  return `${caudalFormatter.format(valueMm)} mm`;
+}
+
 /**
  * Parses a `YYYY-MM-DD` API date as a *local* date (no time component), so
  * formatting it never shifts the calendar day due to timezone conversion.
