@@ -34,6 +34,18 @@ class WorkerSettings(BaseSettings):
     # domain) until a real one is configured for deploy.
     telegram_app_url: str = ""
 
+    # --- Horarios según urgencia (spec 014, M5). Hora local
+    # (America/Argentina/Buenos_Aires, UTC-3 fijo, sin horario de verano).
+    # A2 (estado diario): sale en la primera corrida cuya hora local alcanza
+    # esta hora, no en la primera corrida del día sea la hora que sea.
+    telegram_hora_estado_diario: int = 8
+    # A1/A3 (cambio de nivel de aviso, basado en pronóstico): solo se
+    # publica dentro de esta ventana horaria diurna; fuera de ella espera a
+    # la mañana, sin perderse (ver jobs.telegram_avisos). B1/B2 (umbral
+    # propio, medición real) no usan esta ventana: se publican siempre.
+    telegram_ventana_diurna_inicio_hora: int = 8
+    telegram_ventana_diurna_fin_hora: int = 21
+
 
 @lru_cache
 def get_settings() -> WorkerSettings:
