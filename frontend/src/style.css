@@ -83,6 +83,35 @@ body {
   min-height: 100dvh;
 }
 
+/*
+ * D3 (spec 013): banda de "datos de prueba". Colores fijos (no usa los
+ * tokens de tema) a propósito: tiene que verse igual, alarmante y distinta
+ * de los colores semánticos de aviso del río (--warn/--danger) en los dos
+ * temas, para que nunca se confunda con un aviso real de altura. `sticky`
+ * en vez de `fixed`: queda siempre visible al hacer scroll sin superponerse
+ * al resto del contenido (no hace falta calcular un padding compensatorio).
+ */
+.mock-banner {
+  position: sticky;
+  top: 0;
+  z-index: 2000;
+  text-align: center;
+  padding: 0.5rem 1rem;
+  background: repeating-linear-gradient(45deg, #000 0, #000 12px, #ffcc00 12px, #ffcc00 24px);
+}
+
+.mock-banner-texto {
+  margin: 0;
+  display: inline-block;
+  background: #000;
+  color: #ffcc00;
+  padding: 0.2rem 0.85rem;
+  border-radius: 0.25rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
 .topbar {
   display: flex;
   flex-wrap: wrap;
