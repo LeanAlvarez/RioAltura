@@ -1582,3 +1582,71 @@ body {
 .telefono-nombre {
   font-weight: 600;
 }
+
+/* --- Avisos por Telegram (spec 011) --- */
+
+.telegram-canal-link {
+  display: inline-block;
+  margin: 0.25rem 0 0.75rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.4rem;
+  background: var(--accent);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  /* M1: blanco de toque >= 44 px. */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.telegram-umbral-form label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.telegram-umbral-controles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.telegram-umbral-controles input {
+  flex: 1 1 8rem;
+  min-width: 0;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--card-bg);
+  color: var(--fg);
+  font-size: 1rem;
+  min-height: 44px;
+}
+
+.telegram-umbral-controles button {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.telegram-umbral-error {
+  margin: 0.5rem 0 0;
+  color: var(--error);
+  font-weight: 600;
+}
+
+.telegram-nota {
+  margin-top: 0.75rem;
+}
+
+.telegram-nota code {
+  background: var(--skeleton);
+  border-radius: 0.25rem;
+  padding: 0.05rem 0.3rem;
+}

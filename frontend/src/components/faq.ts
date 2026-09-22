@@ -86,7 +86,15 @@ export function buildFaqEstaticas(): FaqItem[] {
       id: "privacidad",
       pregunta: "¿Guarda datos míos?",
       respuestaHtml:
-        "No usa cookies de seguimiento ni analytics de terceros. Lo único que guarda en tu navegador es tu elección de tema claro/oscuro, y solo si tu navegador lo permite.",
+        "Depende de cómo la uses. Si solo usás esta página: no usa cookies de seguimiento ni " +
+        "analytics de terceros, y lo único que guarda en tu navegador es tu elección de tema " +
+        "claro/oscuro, y solo si tu navegador lo permite. Si te sumás al canal de Telegram: " +
+        "tampoco guardamos nada tuyo, la lista de miembros la maneja Telegram. Si activás el " +
+        "aviso por umbral propio (spec 011): ahí sí guardamos dos datos, tu <code>chat_id</code> " +
+        "de Telegram y el umbral que elegiste — nada de mail, nombre ni ubicación, y nunca a " +
+        "través de esta web (el formulario no le manda nada a nuestro servidor: solo abre " +
+        "Telegram). Te das de baja en cualquier momento mandándole <code>/baja</code> al bot, y " +
+        "eso borra esa fila por completo.",
     },
     {
       id: "autor",

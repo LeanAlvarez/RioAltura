@@ -22,6 +22,16 @@ from jobs.salto_grande import (
     SALTO_GRANDE_INTERVAL_SECONDS,
     job_actualizar_salto_grande,
 )
+from jobs.telegram_avisos import (
+    TELEGRAM_AVISOS_FIRST_RUN_DELAY_SECONDS,
+    TELEGRAM_AVISOS_INTERVAL_SECONDS,
+    job_publicar_avisos_telegram,
+)
+from jobs.telegram_comandos import (
+    TELEGRAM_COMANDOS_FIRST_RUN_DELAY_SECONDS,
+    TELEGRAM_COMANDOS_INTERVAL_SECONDS,
+    job_procesar_comandos_telegram,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +72,24 @@ def build_scheduler() -> BlockingScheduler:
         # Daily job, not hourly: the CTM bulletin is only published once a
         # day (spec 012). Same startup-delay rationale as "alturas"/"pronosticos".
         next_run_time=datetime.now(UTC) + timedelta(seconds=SALTO_GRANDE_FIRST_RUN_DELAY_SECONDS),
+    )
+    scheduler.add_job(
+        job_publicar_avisos_telegram,
+        "interval",
+        seconds=TELEGRAM_AVISOS_INTERVAL_SECONDS,
+        id="telegram_avisos",
+        # After alturas' own first run, so the first pass has a reading to
+        # compare against. Never touches Telegram right at startup either.
+        next_run_time=datetime.now(UTC)
+        + timedelta(seconds=TELEGRAM_AVISOS_FIRST_RUN_DELAY_SECONDS),
+    )
+    scheduler.add_job(
+        job_procesar_comandos_telegram,
+        "interval",
+        seconds=TELEGRAM_COMANDOS_INTERVAL_SECONDS,
+        id="telegram_comandos",
+        next_run_time=datetime.now(UTC)
+        + timedelta(seconds=TELEGRAM_COMANDOS_FIRST_RUN_DELAY_SECONDS),
     )
     return scheduler
 

@@ -42,6 +42,14 @@ describe("buildFaqEstaticas", () => {
     expect(oficial?.respuestaHtml).toContain("caru.org.uy");
     expect(oficial?.respuestaHtml).toContain("ina.gob.ar");
   });
+
+  it("la respuesta de privacidad distingue web, canal y umbral propio, y cómo darse de baja", () => {
+    const privacidad = buildFaqEstaticas().find((i) => i.id === "privacidad");
+    expect(privacidad?.respuestaHtml).toContain("cookies de seguimiento");
+    expect(privacidad?.respuestaHtml).toContain("chat_id");
+    expect(privacidad?.respuestaHtml).toContain("/baja");
+    expect(privacidad?.respuestaHtml).toContain("nada de mail, nombre ni ubicación");
+  });
 });
 
 describe("renderFaq", () => {

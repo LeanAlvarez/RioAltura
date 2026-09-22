@@ -50,6 +50,12 @@ services:
       DB_PORT: "5432"
       # Solo el worker recibe la API key de Google. Nunca la API ni la web.
       FLOODS_API_KEY: ${FLOODS_API_KEY:-}
+      # Telegram (spec 011): solo el worker, igual tratamiento que FLOODS_API_KEY.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CANAL_ID: ${TELEGRAM_CANAL_ID:-}
+      TELEGRAM_PUBLICACION_ACTIVA: ${TELEGRAM_PUBLICACION_ACTIVA:-true}
+      TELEGRAM_TOPE_MENSAJES_DIA: ${TELEGRAM_TOPE_MENSAJES_DIA:-100}
+      TELEGRAM_APP_URL: ${TELEGRAM_APP_URL:-}
     depends_on:
       db:
         condition: service_healthy
