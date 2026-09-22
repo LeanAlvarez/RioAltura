@@ -16,9 +16,14 @@ export type ProximosDiasState = { kind: "loading" } | FetchResult<Pronostico>;
 
 export interface DiaMiniView {
   dia: string;
-  /** Rango anclado, o null para la fila de hoy (spec 007, ítem 5: hoy se mide, no se pronostica). */
+  /** Rango anclado. Null sólo en la fila de hoy CUANDO hay medición real. */
   rango: string | null;
-  /** Solo en la fila de hoy: la altura anclada de hoy, que es ~igual a la real medida (C2). */
+  /**
+   * Sólo en la fila de hoy y sólo si el anclaje se aplicó: ahí la altura
+   * anclada coincide con la real medida (C2). Sin anclaje esto va en null y
+   * la fila muestra rango como cualquier otro día — rotular "medido" una
+   * estimación sería presentar un pronóstico como una medición.
+   */
   medido: string | null;
   tendencia: Tendencia | null;
   extrapolado: boolean;
@@ -56,7 +61,11 @@ function elegirDiaMaximo(dias: readonly DiaPronostico[]): DiaPronostico | undefi
   );
 }
 
-function construirDiasMini(dias: readonly DiaPronostico[], hoyIso: string): DiaMiniView[] {
+function construirDiasMini(
+  dias: readonly DiaPronostico[],
+  hoyIso: string,
+  anclajeAplicado: boolean,
+): DiaMiniView[] {
   return dias.map((dia, index) => {
     const anterior = dias[index - 1];
     const delta = anterior ? dia.altura_anclada_m - anterior.altura_anclada_m : null;
@@ -68,10 +77,15 @@ function construirDiasMini(dias: readonly DiaPronostico[], hoyIso: string): DiaM
     // mostrar el valor medido en vez de rango — la altura anclada de hoy es
     // ~igual a la real (C2).
     const esHoy = dia.fecha === hoyIso;
+    // "Medido" sólo si de verdad hay una medición detrás. Cuando el anclaje no
+    // se aplicó (visto con datos reales: el worker no trajo la altura de hoy,
+    // `anclaje.motivo = "No hay altura real disponible para hoy"`), la altura
+    // anclada ES la estimación pura, y llamarla "medido" es mentir.
+    const hoyMedido = esHoy && anclajeAplicado;
     return {
       dia: esHoy ? "Hoy" : formatDiaCorto(dia.fecha),
-      rango: esHoy ? null : formatRangoMetros(dia.altura_anclada_min_m, dia.altura_anclada_max_m),
-      medido: esHoy ? formatMetros(dia.altura_anclada_m) : null,
+      rango: hoyMedido ? null : formatRangoMetros(dia.altura_anclada_min_m, dia.altura_anclada_max_m),
+      medido: hoyMedido ? formatMetros(dia.altura_anclada_m) : null,
       tendencia: calcularTendencia(delta),
       extrapolado: dia.extrapolado,
     };
@@ -99,7 +113,7 @@ export function deriveProximosDiasView(state: ProximosDiasState, ahora: Date): P
     frase,
     fraseExtrapolada: diaMaximo?.extrapolado ?? false,
     anclajeTexto: describeAnclaje(data.anclaje),
-    dias: construirDiasMini(data.dias, fechaISOLocal(ahora)),
+    dias: construirDiasMini(data.dias, fechaISOLocal(ahora), data.anclaje.aplicado),
     hayExtrapolados: data.dias.some((d) => d.extrapolado),
   };
 }
