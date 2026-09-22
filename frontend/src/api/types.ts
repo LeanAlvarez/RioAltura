@@ -5,10 +5,18 @@
 
 export type EstadoAltura = "normal" | "evacuacion_en_seco" | "alerta" | "evacuacion";
 
+/**
+ * Origen del dato de altura. Espejo de `Fuente` en
+ * `backend/app/schemas/alturas.py` y del enum de `contracts/openapi.yaml`:
+ * si se agrega una fuente allá hay que agregarla acá, o el type guard la
+ * rechaza y la tarjeta degrada con un dato que en realidad estaba bien.
+ */
+export type Fuente = "ina" | "prefectura" | "caru";
+
 export interface UltimaAltura {
   fecha_hora: string;
   altura_m: number;
-  fuente: "ina" | "prefectura";
+  fuente: Fuente;
   tendencia_24h_m: number | null;
   estado: EstadoAltura;
 }

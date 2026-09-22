@@ -7,6 +7,7 @@ import type {
   Estadisticas,
   EstadoAltura,
   Evento,
+  Fuente,
   HistoricoDia,
   MismoDiaAnio,
   NivelAviso,
@@ -36,12 +37,15 @@ function isNullableString(value: unknown): value is string | null {
 const ESTADOS: readonly EstadoAltura[] = ["normal", "evacuacion_en_seco", "alerta", "evacuacion"];
 const NIVELES_AVISO: readonly NivelAviso[] = ["sin_aviso", "atencion", "alerta_probable"];
 
+/** Las fuentes válidas, derivadas del tipo para que no se desincronicen. */
+const FUENTES: readonly Fuente[] = ["ina", "prefectura", "caru"];
+
 export function isUltimaAltura(value: unknown): value is UltimaAltura {
   if (!isRecord(value)) return false;
   return (
     typeof value.fecha_hora === "string" &&
     isNumber(value.altura_m) &&
-    (value.fuente === "ina" || value.fuente === "prefectura") &&
+    FUENTES.includes(value.fuente as Fuente) &&
     isNullableNumber(value.tendencia_24h_m) &&
     typeof value.estado === "string" &&
     (ESTADOS as readonly string[]).includes(value.estado)
