@@ -230,8 +230,9 @@ body {
     padding: 1.5rem;
     grid-template-areas:
       "hoy proximos umbrales"
-      "mapa mapa superficie"
+      "mapa mapa mapa"
       "mapa-disclaimer mapa-disclaimer mapa-disclaimer"
+      "superficie superficie superficie"
       "grafico grafico aguas-arriba"
       "grafico grafico contexto"
       "historial historial precision"
@@ -1027,37 +1028,37 @@ body {
 }
 
 /*
- * L2 (>= 1280 px): el lienzo a 70vh y un panel lateral derecho para el
- * resumen + el panel de slider/escenarios (`.capas-panel`, ver map.ts), en
- * vez de quedar apilados debajo. La estructura DOM no cambia (spec 006): acá
- * solo se reacomoda con grid, sin tocar map.ts.
+ * L2 (>= 1280 px): el lienzo ocupa TODO el ancho de la fila y los controles
+ * van debajo, no al costado. Un panel lateral de 320 px le comía un cuarto
+ * del ancho al satelital, que es lo que el vecino mira para encontrar su
+ * casa; el slider y los escenarios se leen igual de bien en una franja
+ * horizontal. La estructura DOM no cambia (spec 006): acá sólo se reacomoda
+ * con grid, sin tocar map.ts.
  */
 @media (min-width: 1280px) {
   .mapa-inundacion-root {
     display: grid;
-    grid-template-columns: 1fr 320px;
-    grid-template-rows: auto auto;
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
     align-items: stretch;
   }
 
   .mapa-inundacion-lienzo {
     grid-column: 1;
-    grid-row: 1 / 3;
+    grid-row: 1;
     min-height: 70dvh;
   }
 
   .mapa-inundacion-resumen-wrap {
-    grid-column: 2;
-    grid-row: 1;
-    border-top: none;
-    border-left: 1px solid var(--border);
+    grid-column: 1;
+    grid-row: 2;
+    border-left: none;
   }
 
   .mapa-inundacion-panel-wrap {
-    grid-column: 2;
-    grid-row: 2;
-    border-top: none;
-    border-left: 1px solid var(--border);
+    grid-column: 1;
+    grid-row: 3;
+    border-left: none;
     overflow-y: auto;
   }
 }

@@ -348,11 +348,16 @@ describe("createEstadoMapa", () => {
 });
 
 describe("describeMostrando", () => {
-  function vistaConTextos(textos: Partial<VistaMapa["textos"]>): VistaMapa {
+  function vistaConTextos(
+    textos: Partial<VistaMapa["textos"]>,
+    extra: Partial<Pick<VistaMapa, "alturaActualM" | "resuelto">> = {},
+  ): VistaMapa {
     return {
       seleccion: 5,
+      alturaActualM: null,
       resuelto: null,
       escenarios: [],
+      ...extra,
       textos: {
         altura: null,
         cota: null,
@@ -398,5 +403,33 @@ describe("describeMostrando", () => {
   it("sin redondeo y sin medición de hoy todavía", () => {
     const texto = describeMostrando(vistaConTextos({ altura: "7,90 m" }));
     expect(texto).toBe("Mostrando: si el río llega a 7,90 m.");
+  });
+
+  const resueltoEn = (mostrado: number) =>
+    ({ mostrado, entry: { h: mostrado, archivo: "", hectareas: 0, bytes: 0 } }) as unknown as NonNullable<
+      VistaMapa["resuelto"]
+    >;
+
+  it("cuando el usuario eligió un escenario lejano, no dice 'la altura más parecida'", () => {
+    // El bug: arrastrar el slider a 17 m mostraba "El mapa muestra la altura
+    // más parecida que tenemos (17,00 m). Hoy el río está en 4,29 m." — 17 m
+    // no se parece a nada de hoy, es lo que el usuario pidió ver.
+    const vista = vistaConTextos(
+      { altura: "17,00 m", actual: "4,29 m", mostrando: "mostrando 17,00 m" },
+      { alturaActualM: 4.29, resuelto: resueltoEn(17) },
+    );
+    const texto = describeMostrando(vista);
+    expect(texto).not.toContain("más parecida");
+    expect(texto).toContain("escenario");
+    expect(texto).toContain("17,00 m");
+    expect(texto).toContain("4,29 m");
+  });
+
+  it("cuando sólo hubo redondeo de la altura de hoy, sigue explicando el redondeo", () => {
+    const vista = vistaConTextos(
+      { altura: "4,25 m", actual: "4,29 m", mostrando: "mostrando 4,25 m" },
+      { alturaActualM: 4.29, resuelto: resueltoEn(4.25) },
+    );
+    expect(describeMostrando(vista)).toContain("más parecida");
   });
 });

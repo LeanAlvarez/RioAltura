@@ -298,6 +298,19 @@ export function describeMostrando(vista: VistaMapa): string {
   if (altura === null) return "Elegí un escenario para ver las zonas inundables.";
   const actual = vista.textos.actual;
 
+  // Dos situaciones distintas que antes compartían el mismo texto: el mapa
+  // redondeó la altura de hoy al escalón más cercano, o el usuario eligió a
+  // propósito un escenario muy por encima. Decirle "la altura más parecida
+  // que tenemos (17,00 m)" a quien acaba de arrastrar el slider a 17 m no
+  // tiene sentido: 17 m no se parece a nada de hoy, es lo que pidió ver.
+  const mostrado = vista.resuelto?.mostrado ?? null;
+  const esEscenarioElegido =
+    mostrado !== null && vista.alturaActualM !== null && Math.abs(mostrado - vista.alturaActualM) > 1;
+
+  if (esEscenarioElegido) {
+    const base = `Estás viendo un escenario: si el río llegara a ${altura}.`;
+    return actual === null ? base : `${base} Hoy está en ${actual}.`;
+  }
   if (vista.textos.mostrando !== null) {
     const base = `El mapa muestra la altura más parecida que tenemos (${altura}).`;
     return actual === null ? base : `${base} Hoy el río está en ${actual}.`;
@@ -320,6 +333,8 @@ export interface Escenario {
 export interface VistaMapa {
   /** null mientras no haya medición ni elección del usuario: el mapa va sin capa. */
   seleccion: number | null;
+  /** Altura real medida hoy, en metros, para comparar contra lo que se muestra. */
+  alturaActualM: number | null;
   resuelto: ResolvedNivel | null;
   escenarios: Escenario[];
   textos: {
@@ -411,6 +426,7 @@ export function createEstadoMapa(index: CapaIndex): EstadoMapa {
       // with no layer rather than guessing a height.
       return {
         seleccion: null,
+        alturaActualM: medicionActual?.alturaM ?? null,
         resuelto: null,
         escenarios: construirEscenarios(),
         textos: {
@@ -428,6 +444,7 @@ export function createEstadoMapa(index: CapaIndex): EstadoMapa {
     const resuelto = resolveNivel(index, seleccion);
     return {
       seleccion,
+      alturaActualM: medicionActual?.alturaM ?? null,
       resuelto,
       escenarios: construirEscenarios(),
       textos: {
