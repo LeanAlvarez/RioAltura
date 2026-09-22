@@ -19,7 +19,7 @@ class Altura(Base):
 
     __tablename__ = "alturas"
     __table_args__ = (
-        CheckConstraint("fuente IN ('ina', 'prefectura')", name="ck_alturas_fuente"),
+        CheckConstraint("fuente IN ('ina', 'prefectura', 'caru')", name="ck_alturas_fuente"),
         UniqueConstraint("fecha_hora", "fuente", name="uq_alturas_fecha_hora_fuente"),
         Index("ix_alturas_fecha_hora", "fecha_hora"),
     )

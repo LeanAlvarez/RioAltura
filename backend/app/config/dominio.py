@@ -33,6 +33,18 @@ INA_VAR_ID_ALTURA = 2
 # Prefectura port id for Colón (backup source).
 PREFECTURA_PUERTO_COLON = 710
 
+# CARU (Comisión Administradora del Río Uruguay): third fallback source for
+# the port gauge level (spec 009). Station 12 is Colón.
+#
+# Plain HTTP on a bare IP, no domain and no TLS: treat it as scraping, like
+# Prefectura (CLAUDE.md §6). Publishes every 12 h (00:00 and 12:00 local),
+# which is why it sits third and not first — less frequent than INA's hourly
+# series, but available when the other two are not. Verified 2026-09-22: it
+# had that day's reading when neither INA nor Prefectura did, with the same
+# value as INA (4,29 m), confirming it publishes over the same gauge zero.
+CARU_ESTACION_COLON = 12
+CARU_URL_ESTACION = "http://190.0.152.194:8080/alturas/web/user/altura/{estacion}"
+
 # --- Reference flood levels shown as map scenarios (m over the gauge zero) ---
 # These are presentation anchors: heights people in Colón remember, so a number
 # on the slider means something. They never feed any calculation.

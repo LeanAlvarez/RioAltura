@@ -297,8 +297,11 @@ components:
           description: Altura real medida en el puerto, en metros sobre el cero local.
         fuente:
           type: string
-          enum: [ina, prefectura]
-          description: Origen del dato (INA es primario, Prefectura es respaldo).
+          enum: [ina, prefectura, caru]
+          description: >
+            Origen del dato. La cadena es INA (primario, horario) → Prefectura
+            (respaldo) → CARU (tercer respaldo, publica cada 12 h). Se usa el
+            primero que tenga una lectura de las últimas 24 h.
         tendencia_24h_m:
           type: [number, "null"]
           description: >
