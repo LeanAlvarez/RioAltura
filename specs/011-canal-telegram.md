@@ -143,31 +143,96 @@ fecha y el id del mensaje. Es lo que hace posible S2 y S3 a través de reinicios
 
 ## Criterios de aceptación
 
-- [ ] Al cambiar el nivel de aviso se publica un mensaje, y sólo uno.
-- [ ] Reiniciar el worker **no** reenvía el último aviso (S2 persistido en base).
-- [ ] Un nivel que oscila alrededor del umbral no dispara un mensaje por cruce (S1), verificado con
+- [x] Al cambiar el nivel de aviso se publica un mensaje, y sólo uno.
+- [x] Reiniciar el worker **no** reenvía el último aviso (S2 persistido en base).
+- [x] Un nivel que oscila alrededor del umbral no dispara un mensaje por cruce (S1), verificado con
       una serie sintética.
-- [ ] Alcanzado el tope diario (S3) se registra y no se publica más.
-- [ ] Con el interruptor apagado (S4) no se publica nada y el resto del worker sigue igual.
-- [ ] Telegram caído no rompe el job de avisos ni el de alturas (S5).
-- [ ] Sin token configurado el worker arranca y no publica.
-- [ ] El token **no aparece** en logs, fixtures ni mensajes de error.
-- [ ] Todo mensaje de aviso lleva disclaimer, fecha/hora del dato y su fuente.
-- [ ] El formulario web genera el link con el umbral y **no hace ningún POST a nuestra API**.
-- [ ] Fijar umbral, consultarlo y darse de baja funcionan; la baja **borra** la fila.
-- [ ] Un suscriptor recibe un aviso por cruce de su umbral, no uno por corrida del worker.
-- [ ] El FAQ explica sin letra chica qué se guarda en cada caso y cómo darse de baja.
-- [ ] Los tests **nunca** llaman a la API de Telegram (§6): cliente mockeado.
-- [ ] `ruff`, `pytest`, `pnpm build` y `pnpm test` pasan.
+- [x] Alcanzado el tope diario (S3) se registra y no se publica más.
+- [x] Con el interruptor apagado (S4) no se publica nada y el resto del worker sigue igual.
+- [x] Telegram caído no rompe el job de avisos ni el de alturas (S5).
+- [x] Sin token configurado el worker arranca y no publica.
+- [x] El token **no aparece** en logs, fixtures ni mensajes de error.
+- [x] Todo mensaje de aviso lleva disclaimer, fecha/hora del dato y su fuente.
+- [x] El formulario web genera el link con el umbral y **no hace ningún POST a nuestra API**.
+- [x] Fijar umbral, consultarlo y darse de baja funcionan; la baja **borra** la fila.
+- [x] Un suscriptor recibe un aviso por cruce de su umbral, no uno por corrida del worker.
+- [x] El FAQ explica sin letra chica qué se guarda en cada caso y cómo darse de baja.
+- [x] Los tests **nunca** llaman a la API de Telegram (§6): cliente mockeado.
+- [x] `ruff`, `pytest`, `pnpm build` y `pnpm test` pasan.
 
 ## Cómo verificar
 
-(La completa el agente.)
+```bash
+cd /Users/leandroalvarez/orca/workspaces/RioAltura/telegram
+set -a; . ./.env.local; set +a
+docker compose up -d db
+uv run alembic upgrade head        # crea telegram_estado_canal, telegram_envios_dia, telegram_suscripciones
+uv run ruff check . && uv run ruff format --check . && uv run pytest -q
+pnpm -C frontend install
+pnpm -C frontend exec tsc --noEmit && pnpm -C frontend build && pnpm -C frontend test
+```
+
+Resultado real de cada comando (2026-09-22):
+
+- `alembic upgrade head`: corrió `0004 -> 0005` sin errores contra la Postgres del worktree.
+  También se probó `alembic downgrade -1` seguido de `upgrade head` para confirmar que el
+  downgrade de la migración nueva funciona.
+- `ruff check .` / `ruff format --check .`: sin errores.
+- `pytest -q`: **266 passed, 4 skipped, 2 deselected** (los 4 skipped y 2 deselected ya existían
+  antes de esta spec — son los `@pytest.mark.live`/postgres-only de otras specs, no tocados acá).
+  Nuevos: `backend/tests/test_telegram_estado.py` (S1, con la serie sintética que pide el
+  criterio), `backend/tests/test_telegram_repository.py`, `worker/tests/test_telegram_client.py`
+  (incluye el test de redacción del token en logs de `httpx`), `worker/tests/test_telegram_avisos.py`
+  (A1-A3, S1-S5, B1-B4) y `worker/tests/test_telegram_comandos.py` (parsing, `/start`, `/umbral`,
+  `/baja`, persistencia del offset de `getUpdates`).
+- `tsc --noEmit`: sin errores.
+- `pnpm build`: compiló sin errores (`dist/` generado).
+- `pnpm test`: **233 passed** (23 archivos), incluidos `domain/telegram.test.ts` y
+  `components/avisosTelegram.test.ts`.
+
+### Envío real, a mano
+
+Con el token y canal reales del `.env.local` del worktree, un script de una sola vez (fuera de la
+suite de tests, usando `worker/jobs/telegram_client.send_message` directamente) publicó en
+`@RioUruguayNotifica`:
+
+> 🧪 Prueba de la spec 011 (canal de Telegram y avisos por umbral propio). Este mensaje es solo
+> para confirmar que el envío funciona de punta a punta durante la implementación — no es un
+> aviso real, se puede ignorar.
+
+Telegram respondió `ok: true`, `message_id: 3`. El token no se imprimió en ningún momento (se leyó
+de la variable de entorno ya exportada, nunca logueado).
 
 ## Hallazgos
 
-(La completa el agente.)
+- **Sin URL de producción todavía.** `TELEGRAM_APP_URL` queda vacía por defecto (no inventé un
+  dominio): si está vacía, los mensajes simplemente no llevan el "Más info: <link>" del pie. Falta
+  configurarla en el deploy real.
+- **El bot no usa webhook.** El worker es un `BlockingScheduler` de cron, no un servidor HTTP, así
+  que `/start`, `/umbral` y `/baja` se resuelven con *short-polling* (`getUpdates` con `timeout=0`)
+  cada 20 s, en vez de un webhook. Es más simple y no agrega un endpoint público nuevo, a costa de
+  hasta ~20 s de demora en responder un comando. El offset de `getUpdates` se persiste en
+  `telegram_estado_canal.ultimo_update_id` para que un reinicio no reprocese comandos viejos.
+- **El estado diario (A2) no tiene una hora fija.** Se publica en la primera corrida del job
+  (cada hora) del día local en que todavía no se mandó, sea la hora que sea — la spec no pedía un
+  horario específico ("una vez por día"), pero si se quiere que llegue siempre, por ejemplo, a la
+  mañana, hace falta decirlo en una spec futura.
+- **Umbral propio: rango de sanity check, no un umbral de dominio.** El bot y el formulario web
+  aceptan cualquier altura entre 0,01 y 15 m (constantes locales en
+  `worker/jobs/telegram_comandos.py` y `frontend/src/domain/telegram.ts`, no en
+  `backend/app/config/dominio.py`): la spec deja el umbral a elección de cada vecino, no limitado
+  a los tres oficiales de `umbrales.ts`.
+- **Tope diario (S3) es un contador global**, compartido entre el canal y todos los suscriptores
+  (no uno por suscriptor). Me pareció la lectura más fiel a "un bug de nuestro lado no puede
+  convertirse en spam a un pueblo entero": el default es 100/día, configurable por
+  `TELEGRAM_TOPE_MENSAJES_DIA`.
+- No toqué `contracts/openapi.yaml` ni `backend/app/config/dominio.py`: no hay endpoints nuevos
+  (el formulario nunca llama a la API) y no cambié ningún umbral ni la curva.
 
 ## Resumen final
 
-(La completa el agente, máximo 5 líneas.)
+Canal (A1-A3) y aviso por umbral propio (B1-B4) implementados en el worker, con las cinco
+salvaguardas (S1-S5) persistidas en tres tablas nuevas (migración 0005). El formulario web arma un
+deep link a Telegram sin tocar la API; el FAQ ya explica qué se guarda en cada caso. `ruff`,
+`pytest` (266 tests), `tsc`, `pnpm build` y `pnpm test` (233 tests) pasan; probé un envío real al
+canal (`message_id: 3`) sin exponer el token.

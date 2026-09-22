@@ -11,6 +11,7 @@ from app.models.salto_grande import (
     SaltoGrandeLluvia,
     TipoLluvia,
 )
+from app.models.telegram import TelegramEnvioDia, TelegramEstadoCanal, TelegramSuscripcion
 
 __all__ = [
     "Base",
@@ -25,4 +26,7 @@ __all__ = [
     "TipoLluvia",
     "TIPO_LLUVIA_OBSERVADA",
     "TIPO_LLUVIA_PRONOSTICO",
+    "TelegramEstadoCanal",
+    "TelegramEnvioDia",
+    "TelegramSuscripcion",
 ]

@@ -19,6 +19,16 @@ from jobs.salto_grande import (
     job_actualizar_salto_grande,
 )
 from jobs.scheduler import build_scheduler
+from jobs.telegram_avisos import (
+    TELEGRAM_AVISOS_FIRST_RUN_DELAY_SECONDS,
+    TELEGRAM_AVISOS_INTERVAL_SECONDS,
+    job_publicar_avisos_telegram,
+)
+from jobs.telegram_comandos import (
+    TELEGRAM_COMANDOS_FIRST_RUN_DELAY_SECONDS,
+    TELEGRAM_COMANDOS_INTERVAL_SECONDS,
+    job_procesar_comandos_telegram,
+)
 
 
 def test_registra_el_job_heartbeat_cada_minuto() -> None:
@@ -72,6 +82,32 @@ def test_registra_el_job_salto_grande_cada_dia() -> None:
     # Never runs immediately: the worker process test must not touch the real source.
     delay = (job.next_run_time - datetime.now(UTC)).total_seconds()
     assert 0 < delay <= SALTO_GRANDE_FIRST_RUN_DELAY_SECONDS == 150
+
+
+def test_registra_el_job_telegram_avisos_cada_hora() -> None:
+    scheduler = build_scheduler()
+
+    job = scheduler.get_job("telegram_avisos")
+
+    assert job is not None
+    assert isinstance(job.trigger, IntervalTrigger)
+    assert job.trigger.interval.total_seconds() == TELEGRAM_AVISOS_INTERVAL_SECONDS == 3600
+    assert job.func is job_publicar_avisos_telegram
+    delay = (job.next_run_time - datetime.now(UTC)).total_seconds()
+    assert 0 < delay <= TELEGRAM_AVISOS_FIRST_RUN_DELAY_SECONDS == 120
+
+
+def test_registra_el_job_telegram_comandos_cada_20s() -> None:
+    scheduler = build_scheduler()
+
+    job = scheduler.get_job("telegram_comandos")
+
+    assert job is not None
+    assert isinstance(job.trigger, IntervalTrigger)
+    assert job.trigger.interval.total_seconds() == TELEGRAM_COMANDOS_INTERVAL_SECONDS == 20
+    assert job.func is job_procesar_comandos_telegram
+    delay = (job.next_run_time - datetime.now(UTC)).total_seconds()
+    assert 0 < delay <= TELEGRAM_COMANDOS_FIRST_RUN_DELAY_SECONDS == 30
 
 
 def test_heartbeat_solo_loguea(caplog) -> None:

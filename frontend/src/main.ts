@@ -18,6 +18,7 @@ import { mountContexto } from "./components/contexto";
 import { mountHistorial } from "./components/historial";
 import { mountPrecision } from "./components/precision";
 import { mountDetalleTecnico } from "./components/detalleTecnico";
+import { mountAvisosTelegram } from "./components/avisosTelegram";
 import { mountFaq } from "./components/faq";
 import { renderPie } from "./components/pie";
 import { mountThemeToggle } from "./theme";
@@ -76,6 +77,7 @@ app.innerHTML = `
     <section id="tarjeta-salto-grande" class="card" aria-live="polite"></section>
     <section id="tarjeta-historial" class="card card--grafico"></section>
     <section id="tarjeta-precision" class="card"></section>
+    <section id="tarjeta-telegram" class="card"></section>
     <section id="faq" class="card card--faq"></section>
     <section id="tarjeta-detalle" class="card card--detalle"></section>
   </main>
@@ -95,6 +97,7 @@ const contextoEl = document.querySelector<HTMLElement>("#tarjeta-contexto");
 const saltoGrandeEl = document.querySelector<HTMLElement>("#tarjeta-salto-grande");
 const historialEl = document.querySelector<HTMLElement>("#tarjeta-historial");
 const precisionEl = document.querySelector<HTMLElement>("#tarjeta-precision");
+const telegramEl = document.querySelector<HTMLElement>("#tarjeta-telegram");
 const faqEl = document.querySelector<HTMLElement>("#faq");
 const detalleEl = document.querySelector<HTMLElement>("#tarjeta-detalle");
 const pieEl = document.querySelector<HTMLElement>("#pie");
@@ -113,6 +116,7 @@ if (
   !saltoGrandeEl ||
   !historialEl ||
   !precisionEl ||
+  !telegramEl ||
   !faqEl ||
   !detalleEl ||
   !pieEl ||
@@ -140,6 +144,7 @@ mountContexto(contextoEl);
 mountSaltoGrande(saltoGrandeEl);
 mountHistorial(historialEl);
 mountPrecision(precisionEl);
+mountAvisosTelegram(telegramEl);
 mountFaq(faqEl);
 mountDetalleTecnico(detalleEl, { getPronostico, getPronosticoAguasArriba });
 
