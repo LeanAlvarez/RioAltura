@@ -121,6 +121,12 @@ a dos cosas:
 
 - `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CANAL_ID` como variables de entorno, **sólo en el worker**, nunca
   en el frontend ni en logs ni en fixtures (§6). Igual tratamiento que `FLOODS_API_KEY`.
+- **El canal ya existe y está probado** (2026-09-22): `@RioUruguayNotifica`
+  ("Rio Uruguay Notificaciones"), público, con el bot como administrador y permiso de publicar.
+  Verificado con un `sendMessage` real que devolvió `ok: true`.
+  `TELEGRAM_CANAL_ID` es literalmente `@RioUruguayNotifica`: al ser canal público no hace falta el
+  id numérico. El nombre de usuario **no es secreto** y puede vivir en `.env.example` y en los
+  links de la app; el token no.
 - Si falta el token, el worker arranca igual y no publica, registrando el motivo. Un entorno de
   desarrollo sin token tiene que funcionar.
 
