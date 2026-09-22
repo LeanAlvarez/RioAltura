@@ -11,6 +11,7 @@ import { deriveQueHacerView, renderQueHacer } from "./components/queHacer";
 import { deriveUmbralesView, renderUmbrales } from "./components/umbrales";
 import { mountSuperficieAfectada } from "./components/superficieAfectada";
 import { mountAguasArriba } from "./components/aguasArriba";
+import { mountSaltoGrande } from "./components/saltoGrande";
 import { mountContexto } from "./components/contexto";
 import { mountHistorial } from "./components/historial";
 import { mountPrecision } from "./components/precision";
@@ -56,6 +57,7 @@ app.innerHTML = `
     <section id="tarjeta-superficie" class="card"></section>
     <section id="tarjeta-aguas-arriba" class="card" aria-live="polite"></section>
     <section id="tarjeta-contexto" class="card" aria-live="polite"></section>
+    <section id="tarjeta-salto-grande" class="card" aria-live="polite"></section>
     <section id="tarjeta-historial" class="card card--grafico"></section>
     <section id="tarjeta-precision" class="card"></section>
     <section id="faq" class="card card--faq"></section>
@@ -74,6 +76,7 @@ const mapaEl = document.querySelector<HTMLElement>("#tarjeta-mapa");
 const superficieEl = document.querySelector<HTMLElement>("#tarjeta-superficie");
 const aguasArribaEl = document.querySelector<HTMLElement>("#tarjeta-aguas-arriba");
 const contextoEl = document.querySelector<HTMLElement>("#tarjeta-contexto");
+const saltoGrandeEl = document.querySelector<HTMLElement>("#tarjeta-salto-grande");
 const historialEl = document.querySelector<HTMLElement>("#tarjeta-historial");
 const precisionEl = document.querySelector<HTMLElement>("#tarjeta-precision");
 const faqEl = document.querySelector<HTMLElement>("#faq");
@@ -91,6 +94,7 @@ if (
   !superficieEl ||
   !aguasArribaEl ||
   !contextoEl ||
+  !saltoGrandeEl ||
   !historialEl ||
   !precisionEl ||
   !faqEl ||
@@ -117,6 +121,7 @@ mountGrafico(graficoEl);
 mountSuperficieAfectada(superficieEl);
 mountAguasArriba(aguasArribaEl);
 mountContexto(contextoEl);
+mountSaltoGrande(saltoGrandeEl);
 mountHistorial(historialEl);
 mountPrecision(precisionEl);
 mountFaq(faqEl);

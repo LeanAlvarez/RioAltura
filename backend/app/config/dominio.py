@@ -33,6 +33,48 @@ INA_VAR_ID_ALTURA = 2
 # Prefectura port id for Colón (backup source).
 PREFECTURA_PUERTO_COLON = 710
 
+# Comisión Técnica Mixta de Salto Grande (CTM): daily hydrology bulletins for
+# the Salto Grande dam, upstream of Colón (spec 012). Four public PDFs, no
+# authentication, linked from https://www.saltogrande.org/datos_hidrologicos.php
+# (verified 2026-09-22). Treated as scraping (CLAUDE.md §6): there is no API
+# contract, just a TCPDF-generated template.
+SALTO_GRANDE_URL_COMUNICADO = "https://www.saltogrande.org/docs/hidrologia/Comunicado.pdf"
+SALTO_GRANDE_URL_CAUDALES_NIVELES = (
+    "https://www.saltogrande.org/docs/hidrologia/CaudalesNiveles.pdf"
+)
+SALTO_GRANDE_URL_PRECIPITACIONES = "https://www.saltogrande.org/docs/hidrologia/Precipitaciones.pdf"
+SALTO_GRANDE_URL_PRONOSTICOS_P = "https://www.saltogrande.org/docs/hidrologia/PronosticosP.pdf"
+
+# Estaciones de la cascada aguas arriba de Salto Grande, tal como figuran en
+# `CaudalesNiveles.pdf` (tablas "Caudales Medios Diarios Hora 07:00" y
+# "Caudales Hora 07:00", en ese orden; la fila "Aporte" es un total, no una
+# estación, y se descarta). Fuente: CTM Salto Grande, verificado 2026-09-22.
+SALTO_GRANDE_ESTACIONES_CASCADA: tuple[str, ...] = (
+    "Machadinho",
+    "Itá",
+    "Foz de Chapecó",
+    "El Soberbio",
+    "San Javier",
+    "Garruchos",
+    "Santo Tomé",
+    "Alvear",
+    "Paso de los Libres",
+)
+
+# Subcuencas de lluvia (`Precipitaciones.pdf` y `PronosticosP.pdf`), en el
+# orden fijo de columnas de ambos reportes. Nota: "Foz do Chapecó" (grafía
+# portuguesa) es la misma zona que "Foz de Chapecó" en CaudalesNiveles.pdf.
+# Fuente: CTM Salto Grande, verificado 2026-09-22.
+SALTO_GRANDE_SUBCUENCAS_LLUVIA: tuple[str, ...] = (
+    "Itá",
+    "Foz do Chapecó",
+    "El Soberbio",
+    "San Javier",
+    "Santo Tomé",
+    "Paso de los Libres",
+    "Salto Grande",
+)
+
 # CARU (Comisión Administradora del Río Uruguay): third fallback source for
 # the port gauge level (spec 009). Station 12 is Colón.
 #

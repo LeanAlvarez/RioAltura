@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config.settings import get_settings
 from app.logging_config import configure_logging
-from app.routers import alturas, estadisticas, health, pronostico
+from app.routers import alturas, estadisticas, health, pronostico, salto_grande
 
 
 def create_app() -> FastAPI:
@@ -21,6 +21,7 @@ def create_app() -> FastAPI:
     app.include_router(alturas.router)
     app.include_router(pronostico.router)
     app.include_router(estadisticas.router)
+    app.include_router(salto_grande.router)
     return app
 
 

@@ -5,6 +5,7 @@ import type {
   HistoricoDia,
   Pronostico,
   PronosticoAguasArriba,
+  SaltoGrande,
   UltimaAltura,
 } from "../api/types";
 import {
@@ -225,6 +226,51 @@ export function mockEstadisticas(ahora: Date = new Date()): Estadisticas {
       { fecha: "2024-05-14", altura_m: 9.06, etiqueta: "Máximo diario registrado (INA)" },
       { fecha: "2025-06-29", altura_m: 7.66, etiqueta: "Crecida de referencia" },
       { fecha: "2026-07-23", altura_m: 4.44, etiqueta: "Costanera inundada" },
+    ],
+  };
+}
+
+/**
+ * Fixture de `/salto-grande` (spec 012), con los valores reales del
+ * comunicado del 22/09/2026 citado en la spec.
+ */
+export function mockSaltoGrande(ahora: Date = new Date()): SaltoGrande {
+  const hoy = fechaISO(ahora);
+  const ayer = fechaISO(addDias(ahora, -1));
+
+  return {
+    comunicado: {
+      fecha: hoy,
+      aporte_m3s: 7553,
+      evacuado_m3s: 7821,
+      nivel_embalse_m: 34.81,
+      estado_vertedero: "Cerrado",
+      texto_proyeccion:
+        "Hasta la hora 15:00 de mañana, el caudal medio diario evacuado variará entre 8.000 y 7.000 m³/s. " +
+        "Cotas máxima y mínima referidas al puerto de Concordia: 7,00 y 5,30 metros, respectivamente. " +
+        "Cotas máxima y mínima referidas al puerto de Salto: 7,20 y 5,50 metros, respectivamente. " +
+        "El nivel del embalse tenderá a 34,50 m.",
+    },
+    comunicado_anterior: {
+      fecha: ayer,
+      aporte_m3s: 9176,
+      evacuado_m3s: 9692,
+      nivel_embalse_m: 34.88,
+      estado_vertedero: "Cerrado",
+      texto_proyeccion: "Comunicado del día anterior.",
+    },
+    caudales_cascada: [
+      { estacion: "Machadinho", fecha: hoy, caudal_m3s: 2441 },
+      { estacion: "Itá", fecha: hoy, caudal_m3s: 2586 },
+    ],
+    lluvia_observada: [
+      { subcuenca: "El Soberbio", fecha: fechaISO(addDias(ahora, -2)), lluvia_mm: 58 },
+      { subcuenca: "El Soberbio", fecha: fechaISO(addDias(ahora, -1)), lluvia_mm: 1 },
+      { subcuenca: "El Soberbio", fecha: hoy, lluvia_mm: 10 },
+    ],
+    lluvia_pronostico: [
+      { subcuenca: "El Soberbio", fecha: fechaISO(addDias(ahora, 5)), lluvia_mm: 6 },
+      { subcuenca: "El Soberbio", fecha: fechaISO(addDias(ahora, 6)), lluvia_mm: 14 },
     ],
   };
 }
