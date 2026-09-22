@@ -1,4 +1,6 @@
 import "./style.css";
+import { USE_MOCKS } from "./env";
+import { mountMockBanner } from "./components/mockBanner";
 import { fetchHealth } from "./api";
 import { getPronostico, getPronosticoAguasArriba } from "./api/pronostico";
 import { renderHealth } from "./health";
@@ -20,6 +22,20 @@ import { mountFaq } from "./components/faq";
 import { renderPie } from "./components/pie";
 import { mountThemeToggle } from "./theme";
 import { montarEstilosPaleta } from "./graficos/paleta";
+
+// D3/D4/D5 (spec 013): si corre con mocks, avisar por los tres lados posibles
+// antes de tocar cualquier otra cosa — pantalla, título y consola — para que
+// sea imposible confundir datos de prueba con una medición real del río (ver
+// spec 013, caso del 22/09).
+const mockBannerEl = document.querySelector<HTMLElement>("#mock-banner");
+if (!mockBannerEl) throw new Error("#mock-banner not found");
+mountMockBanner(mockBannerEl, USE_MOCKS);
+if (USE_MOCKS) {
+  document.title = `[DATOS DE PRUEBA] ${document.title}`;
+  console.warn(
+    "[RioAltura] Corriendo con VITE_USE_MOCKS=true: la altura del río mostrada NO es una medición real (spec 013).",
+  );
+}
 
 // Paleta de gráficos v3 (spec 008, seguimiento): inyecta las custom
 // properties `--graf-*` antes de montar ningún gráfico, para que el primer

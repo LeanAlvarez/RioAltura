@@ -77,23 +77,69 @@ prueba. Es exactamente el error que se busca prevenir.
 
 ## Criterios de aceptación
 
-- [ ] Con `import.meta.env.PROD`, `USE_MOCKS` es `false` aunque la variable diga `true`.
-- [ ] `VITE_USE_MOCKS=true pnpm build` **falla** con un mensaje claro.
-- [ ] El bundle de producción **no incluye** `mocks/`, verificado inspeccionando `dist/`.
-- [ ] Con mocks activos, la banda "DATOS DE PRUEBA" se ve en todas las pantallas, a 360 y a 1920 px,
+- [x] Con `import.meta.env.PROD`, `USE_MOCKS` es `false` aunque la variable diga `true`.
+- [x] `VITE_USE_MOCKS=true pnpm build` **falla** con un mensaje claro.
+- [x] El bundle de producción **no incluye** `mocks/`, verificado inspeccionando `dist/`.
+- [x] Con mocks activos, la banda "DATOS DE PRUEBA" se ve en todas las pantallas, a 360 y a 1920 px,
       en ambos temas, y no se puede cerrar.
-- [ ] El `<title>` y la consola lo avisan.
-- [ ] Un test falla si se rompe D1; otro verifica que la banda se renderiza.
-- [ ] `ruff`, `pytest`, `pnpm build` y `pnpm test` pasan.
+- [x] El `<title>` y la consola lo avisan.
+- [x] Un test falla si se rompe D1; otro verifica que la banda se renderiza.
+- [x] `ruff`, `pytest`, `pnpm build` y `pnpm test` pasan.
 
 ## Cómo verificar
 
-(La completa el agente.)
+```bash
+cd frontend
+pnpm exec tsc --noEmit          # sin errores
+pnpm test                       # 24 archivos, 247 tests, incluye env.test.ts y mockBanner.test.ts
+pnpm build                      # dist/ limpio
+VITE_USE_MOCKS=true pnpm build  # TIENE que fallar (exit code 1, mensaje explícito en vite.config.ts)
+
+# dist/ no contiene el despachador de mocks ni las fixtures:
+rg -i "mockFetch|mockUltimaAltura|mockPronostico|jsonResponse|hybas_6121320620" dist/assets/*.js
+# sin matches (exit 1 de rg)
+
+cd ..
+set -a; . ./.env.local; set +a
+uv run ruff check . && uv run pytest -q   # sin tocar backend/worker, sigue en verde
+```
+
+Verificación visual con Playwright (`frontend/scripts/verificar-banda-mock.mjs`):
+
+```bash
+VITE_USE_MOCKS=true pnpm -C frontend dev &   # puerto de WEB_PORT en .env.local
+node frontend/scripts/verificar-banda-mock.mjs http://localhost:<WEB_PORT>/ si
+# y, levantando el server sin la variable:
+node frontend/scripts/verificar-banda-mock.mjs http://localhost:<WEB_PORT>/ no
+```
+Chequea, en 360×900 y 1920×900, en `light` y `dark`: visibilidad de `#mock-banner`, texto
+"DATOS DE PRUEBA" y prefijo `[DATOS DE PRUEBA]` en `<title>`. También se confirmó a mano con
+capturas y un scroll de 2000px que la banda queda pegada arriba (`position: sticky`).
 
 ## Hallazgos
 
-(La completa el agente.)
+- **El bundle "limpio" (sin `VITE_USE_MOCKS`) igual incluía todo `mocks/data.ts` y `mocks/fetch.ts`
+  antes de este cambio.** La causa: `src/api/fetch-default.ts` decidía `mockFetch` vs. `fetch` con
+  `USE_MOCKS ? mockFetch : fetch`, donde `USE_MOCKS` era un *binding* importado desde `env.ts`.
+  Vite/Rollup no propagan el valor constante de un export entre módulos, así que aunque `USE_MOCKS`
+  siempre valiera `false` en producción, el import de `mockFetch` (y transitivamente de las 400+
+  líneas de fixtures) no se podía eliminar por tree-shaking. Se verificó con `rg` sobre el bundle
+  antes y después del fix: antes aparecían `mockFetch`, `jsonResponse`, `hybas_6121320620` (gauge id
+  que solo vive en la fixture) y todas las funciones `mock*`; después, ninguno. El fix: mover el
+  chequeo a `import.meta.env.PROD` **inline, en el mismo archivo donde se importa `mockFetch`**
+  (`fetch-default.ts`), para que el reemplazo literal que hace Vite de `import.meta.env.PROD` permita
+  a Rollup plegar el ternario y descartar la rama entera (y con ella el import). Esto no estaba en el
+  alcance original de la spec pero es necesario para cumplir el criterio de aceptación "el bundle de
+  producción no incluye `mocks/`", así que se corrigió como parte de D1.
+- No se tocó `contracts/openapi.yaml` ni `backend/app/config/dominio.py`.
+- No se agregaron dependencias (se corrió `pnpm install` porque `node_modules/` no existía en el
+  worktree; el lockfile no cambió).
 
 ## Resumen final
 
-(La completa el agente, máximo 5 líneas.)
+Defensa en tres capas contra confundir datos de prueba con mediciones reales: `USE_MOCKS` ahora es
+una función pura testeada donde `PROD` siempre gana; `vite build` aborta si `VITE_USE_MOCKS=true`;
+y una banda fija negro/amarillo, sin botón de cierre, avisa en pantalla, título y consola. Además se
+encontró y corrigió un bug real preexistente: el despachador de mocks sobrevivía en el bundle de
+producción por una indirección entre módulos que impedía el tree-shaking; ahora `dist/` está limpio,
+verificado por grep. Los 6 criterios de aceptación y los 4 comandos de verificación pasan en verde.

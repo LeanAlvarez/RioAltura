@@ -7,6 +7,10 @@
     <title>Río Uruguay en Colón</title>
   </head>
   <body>
+    <!-- D3 (spec 013): fuera de #app a propósito, para quedar visible aunque
+         el resto del montaje falle. mountMockBanner (src/components/mockBanner.ts)
+         la llena solo si USE_MOCKS está activo; si no, queda con `hidden`. -->
+    <div id="mock-banner" class="mock-banner" hidden role="alert"></div>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
