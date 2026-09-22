@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-Fuente = Literal["ina", "prefectura"]
+Fuente = Literal["ina", "prefectura", "caru"]
 Estado = Literal["normal", "evacuacion_en_seco", "alerta", "evacuacion"]
 
 ESTADOS: tuple[Estado, ...] = ("normal", "evacuacion_en_seco", "alerta", "evacuacion")

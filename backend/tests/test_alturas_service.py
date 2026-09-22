@@ -237,3 +237,51 @@ def test_hoy_buenos_aires_convierte_desde_utc() -> None:
     # 2026-09-21T02:00Z es 2026-09-20T23:00 local (UTC-3): todavía el día anterior.
     assert hoy_buenos_aires(datetime(2026, 9, 21, 2, tzinfo=UTC)) == date(2026, 9, 20)
     assert hoy_buenos_aires(datetime(2026, 9, 21, 4, tzinfo=UTC)) == date(2026, 9, 21)
+
+
+# --- CARU como tercera fuente en la API (spec 009, corregido en la 010) ------
+#
+# La 009 amplió el check de la base, el OpenAPI y el FAQ, pero no el `Literal`
+# del esquema ni el diccionario de prioridad del servicio. Los 192 tests
+# pasaron y el CI quedó verde porque ningún test de la API tenía una fila de
+# `caru`: el bug sólo apareció al correr el stack real y ganar CARU la cadena,
+# rompiendo /alturas/ultima con un 500. Estos tests fallan sin el arreglo.
+
+
+def test_promediar_por_dia_usa_caru_cuando_es_la_unica_fuente() -> None:
+    rows = [
+        AlturaRow(fecha_hora=datetime(2026, 9, 22, 3, 0, tzinfo=UTC), altura_m=4.29, fuente="caru"),
+    ]
+    resultado = promediar_por_dia(rows)
+    assert len(resultado) == 1
+    assert resultado[0].altura_m == pytest.approx(4.29)
+
+
+def test_promediar_por_dia_prefiere_ina_sobre_prefectura_sobre_caru() -> None:
+    momento = datetime(2026, 9, 22, 15, 0, tzinfo=UTC)
+    rows = [
+        AlturaRow(fecha_hora=momento, altura_m=9.0, fuente="caru"),
+        AlturaRow(fecha_hora=momento, altura_m=8.0, fuente="prefectura"),
+        AlturaRow(fecha_hora=momento, altura_m=7.0, fuente="ina"),
+    ]
+    # Mismo orden que la cadena del worker: gana el INA.
+    assert promediar_por_dia(rows)[0].altura_m == pytest.approx(7.0)
+
+    sin_ina = [r for r in rows if r.fuente != "ina"]
+    assert promediar_por_dia(sin_ina)[0].altura_m == pytest.approx(8.0)
+
+    solo_caru = [r for r in rows if r.fuente == "caru"]
+    assert promediar_por_dia(solo_caru)[0].altura_m == pytest.approx(9.0)
+
+
+def test_promediar_por_dia_ignora_una_fuente_desconocida_en_vez_de_romper() -> None:
+    # Una fuente que la base acepte pero el servicio no conozca no puede tirar
+    # abajo el endpoint: fue exactamente el KeyError que rompió /alturas.
+    rows = [
+        AlturaRow(fecha_hora=datetime(2026, 9, 22, 3, 0, tzinfo=UTC), altura_m=4.29, fuente="ina"),
+        AlturaRow(
+            fecha_hora=datetime(2026, 9, 22, 4, 0, tzinfo=UTC), altura_m=99.0, fuente="marte"
+        ),
+    ]
+    resultado = promediar_por_dia(rows)
+    assert resultado[0].altura_m == pytest.approx(4.29)
