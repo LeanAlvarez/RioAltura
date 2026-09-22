@@ -74,22 +74,34 @@ def obtener_ultima(engine: Engine) -> UltimaAltura | None:
     )
 
 
+# Orden de preferencia cuando un día tiene lecturas de varias fuentes. Es el
+# mismo de la cadena del worker (spec 009): INA horario primero, Prefectura
+# después, CARU último porque publica cada 12 h.
+_PRIORIDAD_FUENTES = ("ina", "prefectura", "caru")
+
+
 def promediar_por_dia(rows: Iterable[AlturaRow], tz: ZoneInfo = BUENOS_AIRES) -> list[AlturaDiaria]:
     """Average readings per local day, preferring INA over Prefectura for each day.
 
-    A day uses only its 'ina' rows if there are any; otherwise it uses its
-    'prefectura' rows. The result is sorted by fecha ascending.
+    A day uses the rows of its best available source, in the same order as the
+    worker's fallback chain: 'ina', then 'prefectura', then 'caru'. The result
+    is sorted by fecha ascending.
     """
     por_dia: dict[date, dict[str, list[float]]] = {}
     for row in rows:
         fecha_local = row.fecha_hora.astimezone(tz).date()
-        dia = por_dia.setdefault(fecha_local, {"ina": [], "prefectura": []})
-        dia[row.fuente].append(row.altura_m)
+        dia = por_dia.setdefault(fecha_local, {fuente: [] for fuente in _PRIORIDAD_FUENTES})
+        # Una fuente desconocida no puede tirar abajo el endpoint: se ignora.
+        if row.fuente in dia:
+            dia[row.fuente].append(row.altura_m)
 
     resultado: list[AlturaDiaria] = []
     for fecha_local in sorted(por_dia):
         valores = por_dia[fecha_local]
-        usados = valores["ina"] if valores["ina"] else valores["prefectura"]
+        usados = next(
+            (valores[fuente] for fuente in _PRIORIDAD_FUENTES if valores[fuente]),
+            [],
+        )
         if not usados:
             continue
         resultado.append(
