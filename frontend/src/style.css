@@ -837,9 +837,9 @@ body {
 }
 
 .superficie-svg {
+  /* El alto lo fija el componente en línea, para que el viewBox y los
+     píxeles coincidan y `preserveAspectRatio="none"` no deforme el texto. */
   width: 100%;
-  flex: 1 1 0;
-  min-height: 120px;
   margin: 0.5rem 0;
 }
 

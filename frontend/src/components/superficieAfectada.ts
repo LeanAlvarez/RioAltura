@@ -69,8 +69,36 @@ const defaultDeps: SuperficieAfectadaDeps = {
   loadMapModule: () => import("../map"),
 };
 
-const ANCHO_SVG = 320;
-const ALTO_SVG = 120;
+/**
+ * Alto del área de dibujo, en unidades del viewBox. El ANCHO se calcula del
+ * contenedor en cada render: el SVG usa `preserveAspectRatio="none"`, así que
+ * si el viewBox no acompaña al ancho real la escala se vuelve no uniforme y
+ * el texto sale desparramado. Con la tarjeta a ancho completo eso llegaba a
+ * estirar 4,5 veces a lo ancho mientras comprimía a lo alto.
+ */
+/** Ancho mínimo del área de dibujo, para que la curva se lea en un celular. */
+const ANCHO_SVG_MIN = 260;
+const ALTO_SVG_MIN = 120;
+const ALTO_SVG_MAX = 220;
+/** Proporción ancho/alto a la que tiende el dibujo en pantallas anchas. */
+const RELACION_DIBUJO = 6;
+
+/** Ancho del área de dibujo para un contenedor de `anchoContenedor` px. */
+export function anchoDibujo(anchoContenedor: number, margenIzquierdo: number): number {
+  return Math.max(ANCHO_SVG_MIN, Math.round(anchoContenedor - margenIzquierdo - 8));
+}
+
+/**
+ * Alto del área de dibujo para un ancho dado.
+ *
+ * Crece con el ancho hasta un tope, para que la tarjeta a ancho completo no
+ * quede con una franja de 120 px perdida en 1.800 px de ancho, pero tampoco
+ * se convierta en un cartel. El SVG se dibuja después con exactamente estas
+ * medidas en píxeles, así que la escala queda 1:1 y el texto no se deforma.
+ */
+export function altoDibujo(anchoDibujoPx: number): number {
+  return Math.round(Math.min(ALTO_SVG_MAX, Math.max(ALTO_SVG_MIN, anchoDibujoPx / RELACION_DIBUJO)));
+}
 // Márgenes para los rótulos de eje (ítem 9, correcciones de diseño; L4 spec
 // 008: >= 13 px de fuente, así que el margen crece un poco para que no se
 // corten). La curva original no tenía ningún eje, así que ninguna de las dos
@@ -117,12 +145,16 @@ export function mountSuperficieAfectada(container: HTMLElement, deps: Superficie
     (index) => {
       if (!estadoEl) return;
       const puntos = buildCurvaPuntos(index);
-      const escalados = escalarCurva(puntos, ANCHO_SVG, ALTO_SVG);
-      const polylinePoints = escalados.map((p) => `${String(p.x)},${String(p.y)}`).join(" ");
       const hectareasTodas = puntos.map((p) => p.hectareas);
       const haMin = Math.min(...hectareasTodas);
       const haMax = Math.max(...hectareasTodas);
+      // El margen depende de las etiquetas, y el ancho de dibujo del margen:
+      // este orden importa.
       const MARGEN_IZQUIERDO = margenEjeY([formatHectareas(haMax), formatHectareas(haMin)]);
+      const ANCHO_SVG = anchoDibujo(container.clientWidth || 360, MARGEN_IZQUIERDO);
+      const ALTO_SVG = altoDibujo(ANCHO_SVG);
+      const escalados = escalarCurva(puntos, ANCHO_SVG, ALTO_SVG);
+      const polylinePoints = escalados.map((p) => `${String(p.x)},${String(p.y)}`).join(" ");
       const anchoTotal = ANCHO_SVG + MARGEN_IZQUIERDO;
       const altoTotal = ALTO_SVG + MARGEN_INFERIOR;
 
@@ -153,7 +185,7 @@ export function mountSuperficieAfectada(container: HTMLElement, deps: Superficie
       container.innerHTML = `
         <h2>Cuánta tierra se tapa de agua</h2>
         <p class="card-subtitulo">Cuánto campo y ciudad quedaría bajo el agua según cuánto suba el río.</p>
-        <svg class="superficie-svg" preserveAspectRatio="none" viewBox="0 0 ${String(anchoTotal)} ${String(altoTotal)}" role="img" aria-label="Curva de hectáreas inundadas según la altura del río">
+        <svg class="superficie-svg" style="height:${String(altoTotal)}px" preserveAspectRatio="none" viewBox="0 0 ${String(anchoTotal)} ${String(altoTotal)}" role="img" aria-label="Curva de hectáreas inundadas según la altura del río">
           <text class="superficie-eje-etiqueta" x="${String(MARGEN_IZQUIERDO - 4)}" y="9" text-anchor="end">${formatHectareas(haMax)}</text>
           <text class="superficie-eje-etiqueta" x="${String(MARGEN_IZQUIERDO - 4)}" y="${String(ALTO_SVG)}" text-anchor="end">${formatHectareas(haMin)}</text>
           ${marcaMaximoHtml}
