@@ -44,6 +44,20 @@ PREFECTURA_PUERTO_COLON = 710
 # starts in 2023. Treat as indicative until an official record confirms it.
 CRECIDA_ENERO_2019_M = 8.87
 
+# Marca MOP de "Crecida Máxima Observada" en Colón (10 m sobre el cero de la regla).
+# Fuente: Informe INA-CARU 2019, "Relevamiento topográfico" (Informe 2),
+# https://www.ina.gob.ar/delta/pdf/INA-CARU_2019_Informe2_RelevamientoTopografico.pdf
+# La marca tiene cota GPS de 9,752 m IGN. Es el mismo informe del que sale el cero
+# del hidrómetro (CERO_HIDROMETRO_IGN_M, −0,26 m IGN).
+#
+# OJO: no confundir con el máximo de la serie del INA que carga este sistema
+# (9,06 m, mayo 2024, ver el escenario "9,06 máx. may 2024" en el mapa): esa serie
+# arranca en 2023, así que su máximo es el máximo DESDE 2023, no el máximo
+# histórico. La marca MOP de 10 m es anterior y más alta que ese máximo de serie
+# y que CRECIDA_ENERO_2019_M. Por eso el umbral de "escenario hipotético: nunca
+# registrado en Colón" (spec 008, S4) son estos 10 m, no 9,06.
+CRECIDA_MAXIMA_OBSERVADA_M = 10.00
+
 # --- Early-warning thresholds on the 3-day forecast discharge (m³/s) ---
 # Calibrated with only 2 events: PROVISIONAL.
 

@@ -1,7 +1,11 @@
+import uPlot from "uplot";
+import "uplot/dist/uPlot.min.css";
 import type { FetchResult } from "../api/client";
-import { getPronosticoAguasArriba } from "../api/pronostico";
+import { getPronostico, getPronosticoAguasArriba } from "../api/pronostico";
 import type { DiaPronostico, PronosticoAguasArriba } from "../api/types";
-import { calcularTendencia, formatDiaSemanaFecha, formatRangoMetros, type Tendencia } from "../format";
+import { calcularTendencia, formatDiaSemanaFecha, formatRangoMetros, parseFechaLocal, type Tendencia } from "../format";
+import { PALETA, TRAZOS, fondoTrazoCss, leerVariableCss, propsTrazoUplot } from "../graficos/paleta";
+import { onTemaCambia } from "../theme";
 import { renderCardError, renderCardSkeleton } from "./card";
 
 export type AguasArribaState = { kind: "loading" } | FetchResult<PronosticoAguasArriba>;
@@ -34,6 +38,42 @@ export function deriveAguasArribaView(state: AguasArribaState): AguasArribaView 
   return { kind: "ready", frase, tendencia };
 }
 
+function fechaAEpochSegundos(fechaIso: string): number {
+  return Math.floor(parseFechaLocal(fechaIso).getTime() / 1000);
+}
+
+export interface AguasArribaChartSeries {
+  x: number[];
+  colon: (number | null)[];
+  aguasArriba: (number | null)[];
+}
+
+/**
+ * Pure: alinea el pronóstico de Colón y el de aguas arriba por fecha, en un
+ * eje x único y ordenado (mismo patrón que `buildChartSeries`/
+ * `buildPrecisionSeries`), con `null` donde a alguna de las dos series le
+ * falta ese día. Usa el centro anclado (`altura_anclada_m`) de cada una,
+ * igual que el resto de las líneas de pronóstico del dashboard. No DOM.
+ */
+export function buildAguasArribaChartSeries(
+  colon: readonly DiaPronostico[] | null,
+  aguasArriba: readonly DiaPronostico[] | null,
+): AguasArribaChartSeries {
+  const fechas = new Set<string>();
+  for (const d of colon ?? []) fechas.add(d.fecha);
+  for (const d of aguasArriba ?? []) fechas.add(d.fecha);
+  const fechasOrdenadas = Array.from(fechas).sort();
+
+  const colonPorFecha = new Map((colon ?? []).map((d) => [d.fecha, d.altura_anclada_m]));
+  const aguasArribaPorFecha = new Map((aguasArriba ?? []).map((d) => [d.fecha, d.altura_anclada_m]));
+
+  return {
+    x: fechasOrdenadas.map(fechaAEpochSegundos),
+    colon: fechasOrdenadas.map((f) => colonPorFecha.get(f) ?? null),
+    aguasArriba: fechasOrdenadas.map((f) => aguasArribaPorFecha.get(f) ?? null),
+  };
+}
+
 const TITULO = "Aguas arriba";
 const FLECHAS: Record<Tendencia, string> = { sube: "▲", baja: "▼", estable: "→" };
 const FLECHAS_TEXTO: Record<Tendencia, string> = { sube: "Sube", baja: "Baja", estable: "Estable" };
@@ -59,22 +99,158 @@ export function renderAguasArriba(container: HTMLElement, view: AguasArribaView)
     ? `<p class="tendencia">${FLECHAS[view.tendencia]} ${FLECHAS_TEXTO[view.tendencia]} en los próximos días</p>`
     : "";
 
+  // El mini gráfico (Colón vs aguas arriba) se monta aparte, si hay datos de
+  // las dos series (ver `mountAguasArriba`); el placeholder queda siempre
+  // acá para no dejar un hueco vacío en la tarjeta (diagnóstico de esta
+  // tarea: hoy queda con mucho espacio libre debajo del texto).
   container.innerHTML = `
     <h2>${TITULO}</h2>
     <p class="frase-pronostico">${view.frase}</p>
     ${tendenciaHtml}
+    <div class="aguas-arriba-chart-wrap">
+      <div class="grafico-canvas" id="aguas-arriba-canvas"></div>
+      <ul class="grafico-leyenda" id="aguas-arriba-leyenda" aria-hidden="true"></ul>
+    </div>
   `;
+}
+
+const fechaEjeAguasArribaFormatter = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short" });
+
+/**
+ * (Re)dibuja el mini gráfico "Colón vs aguas arriba", releyendo la paleta
+ * en cada llamada (reactividad al tema). Reusa los roles `pronostico`
+ * (Colón, verde discontinuo) e `historico` (aguas arriba, violeta
+ * punteado) de `graficos/paleta.ts`: mismos tokens que el resto del
+ * dashboard, con patrones de guiones ya distintos entre sí.
+ */
+function dibujarMiniChart(
+  canvasEl: HTMLDivElement,
+  leyendaEl: HTMLUListElement,
+  referenciaColores: HTMLElement,
+  series: AguasArribaChartSeries,
+  ref: { instancia: uPlot | null },
+): void {
+  const colorColon = leerVariableCss("--graf-pronostico", PALETA.light.pronostico, referenciaColores);
+  const colorAguasArriba = leerVariableCss("--graf-historico", PALETA.light.historico, referenciaColores);
+  const colorEje = leerVariableCss("--graf-eje", PALETA.light.ejeTexto, referenciaColores);
+  const colorGrilla = leerVariableCss("--graf-grilla", PALETA.light.grilla, referenciaColores);
+
+  leyendaEl.innerHTML = `
+    <li><span class="grafico-leyenda-linea" style="background:${fondoTrazoCss(colorColon, TRAZOS.pronostico)};height:${TRAZOS.pronostico.widthPx}px"></span> Colón</li>
+    <li><span class="grafico-leyenda-linea" style="background:${fondoTrazoCss(colorAguasArriba, TRAZOS.historico)};height:${TRAZOS.historico.widthPx}px"></span> Aguas arriba</li>
+  `;
+
+  ref.instancia?.destroy();
+  canvasEl.replaceChildren();
+  const width = Math.max(240, canvasEl.clientWidth || referenciaColores.clientWidth || 280);
+  ref.instancia = new uPlot(
+    {
+      width,
+      height: 150,
+      // Reserva lugar para que el último rótulo del eje X no quede cortado
+      // contra el borde del lienzo (menor, revisión de diseño; mismo ajuste
+      // que `grafico.ts`), con menos margen que el resto por ser un
+      // mini-gráfico angosto.
+      padding: [8, 20, 0, 0],
+      scales: { x: { time: true } },
+      series: [
+        {},
+        {
+          label: "Colón",
+          stroke: colorColon,
+          points: { show: false },
+          ...propsTrazoUplot(TRAZOS.pronostico),
+        },
+        {
+          label: "Aguas arriba",
+          stroke: colorAguasArriba,
+          points: { show: false },
+          ...propsTrazoUplot(TRAZOS.historico),
+        },
+      ],
+      axes: [
+        {
+          font: "13px system-ui, sans-serif",
+          stroke: colorEje,
+          grid: { stroke: colorGrilla, width: 1 },
+          ticks: { stroke: colorGrilla, width: 1 },
+          values: (_u, splits) => splits.map((s) => fechaEjeAguasArribaFormatter.format(new Date(s * 1000))),
+        },
+        {
+          font: "13px system-ui, sans-serif",
+          stroke: colorEje,
+          grid: { stroke: colorGrilla, width: 1 },
+          ticks: { stroke: colorGrilla, width: 1 },
+        },
+      ],
+      legend: { show: false },
+    },
+    [series.x, series.colon, series.aguasArriba],
+    canvasEl,
+  );
+}
+
+export interface MontajeMiniChartAguasArriba {
+  destroy(): void;
+}
+
+function mountMiniChartAguasArriba(container: HTMLElement, series: AguasArribaChartSeries): MontajeMiniChartAguasArriba {
+  const canvasEl = container.querySelector<HTMLDivElement>("#aguas-arriba-canvas");
+  const leyendaEl = container.querySelector<HTMLUListElement>("#aguas-arriba-leyenda");
+  if (!canvasEl || !leyendaEl) return { destroy(): void {} };
+
+  const ref: { instancia: uPlot | null } = { instancia: null };
+  dibujarMiniChart(canvasEl, leyendaEl, container, series, ref);
+
+  const desuscribirTema = onTemaCambia(() => dibujarMiniChart(canvasEl, leyendaEl, container, series, ref));
+
+  function manejarResize(): void {
+    if (ref.instancia && canvasEl) ref.instancia.setSize({ width: Math.max(240, canvasEl.clientWidth), height: 150 });
+  }
+  window.addEventListener("resize", manejarResize);
+
+  return {
+    destroy(): void {
+      desuscribirTema();
+      window.removeEventListener("resize", manejarResize);
+      ref.instancia?.destroy();
+      ref.instancia = null;
+    },
+  };
 }
 
 export interface AguasArribaDeps {
   getPronosticoAguasArriba: typeof getPronosticoAguasArriba;
+  getPronostico: typeof getPronostico;
 }
 
-const defaultDeps: AguasArribaDeps = { getPronosticoAguasArriba };
+const defaultDeps: AguasArribaDeps = { getPronosticoAguasArriba, getPronostico };
 
-export function mountAguasArriba(container: HTMLElement, deps: AguasArribaDeps = defaultDeps): void {
+export interface MontajeAguasArriba {
+  /** Desuscribe del cambio de tema y destruye la instancia de uPlot del mini gráfico, si llegó a montarse. */
+  destroy(): void;
+}
+
+export function mountAguasArriba(container: HTMLElement, deps: AguasArribaDeps = defaultDeps): MontajeAguasArriba {
   renderAguasArriba(container, deriveAguasArribaView({ kind: "loading" }));
-  void deps.getPronosticoAguasArriba().then((result) => {
-    renderAguasArriba(container, deriveAguasArribaView(result));
+
+  let chart: MontajeMiniChartAguasArriba | null = null;
+
+  void Promise.all([deps.getPronosticoAguasArriba(), deps.getPronostico()]).then(([aguasArribaResult, colonResult]) => {
+    renderAguasArriba(container, deriveAguasArribaView(aguasArribaResult));
+
+    // El mini gráfico necesita las dos series (spec: "pronóstico aguas
+    // arriba vs. Colón"); si alguna de las dos no está disponible, se queda
+    // solo con el texto (degradación elegante, CLAUDE.md §6).
+    if (aguasArribaResult.kind === "ok" && colonResult.kind === "ok") {
+      const series = buildAguasArribaChartSeries(colonResult.data.dias, aguasArribaResult.data.dias);
+      chart = mountMiniChartAguasArriba(container, series);
+    }
   });
+
+  return {
+    destroy(): void {
+      chart?.destroy();
+    },
+  };
 }

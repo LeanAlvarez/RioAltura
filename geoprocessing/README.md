@@ -12,8 +12,9 @@ dependencias pesadas (`rasterio`, `scipy`, `shapely`).
    solo el BBOX necesario directamente de los tiles COG en S3 (sin descargar el tile
    completo).
 2. La remuestrea ×3 con interpolación bilineal para suavizar los bordes.
-3. Para cada altura de puerto de 3,00 a 13,00 m (paso 0,25 m, o 0,5 m por encima de
-   10,50 m si hace falta para entrar en el presupuesto de tamaño), calcula qué celdas
+3. Para cada altura de puerto de 3,00 a 20,00 m (paso 0,25 m hasta 10,50 m, 0,5 m
+   entre 10,50 y 13,00 m, 1,0 m entre 13,00 y 20,00 m — un paso fijo, que **no**
+   cambia para entrar en el presupuesto de tamaño), calcula qué celdas
    quedan bajo el agua **y conectadas al río** (relleno por conectividad de 8 vecinos,
    no solo por cota), le resta el río normal (nivel base) y clasifica la profundidad
    en 3 clases.
@@ -58,7 +59,7 @@ Flags útiles:
   1,5-2 veces el tamaño de píxel tras el remuestreo ×3 a esta latitud; una tolerancia
   mucho más chica que el píxel casi no reduce los vértices de "escalera" del borde
   rasterizado, que es lo que más pesa una vez limpiada la máscara).
-- `--max-mb <n>`: presupuesto de tamaño total (default `15`).
+- `--max-mb <n>`: presupuesto de tamaño total (default `25`).
 - `--min-area-ha <n>`: saca componentes de agua nueva más chicos que esto, en
   hectáreas (default `0.1`). Subilo si todavía sobra tamaño por ruido.
 - `--min-hole-ha <n>`: rellena huecos interiores más chicos que esto, en hectáreas
@@ -80,6 +81,11 @@ muy fragmentadas (charcos aislados chicos, huecos secos chicos dentro de una man
 grande no se ven), a cambio de un tamaño manejable. Es un compromiso a documentar en
 el resumen de la spec si hace falta usarlo, no algo para subir en silencio.
 
+**El paso (0,25 / 0,5 / 1,0 m) nunca cambia para entrar en el presupuesto** (spec
+008, S1/S2): sólo escalan automáticamente la tolerancia de simplificación (hasta
+`MAX_TOLERANCE_ATTEMPTS` veces) y, a mano si hace falta, `--min-area-ha` /
+`--min-hole-ha`. El rango de alturas (3,00 a 20,00 m) tampoco se recorta nunca.
+
 Correr los tests del propio proyecto (numpy puro, sin red ni I/O de rasterio):
 
 ```bash
@@ -100,9 +106,12 @@ correspondiente o todo `geoprocessing/data/`.
   y al sur (queda `sur=-32.35`, `norte=-32.10`). Ese margen no se repite en las
   expansiones automáticas.
 - Si el agua nueva (sin contar el río normal) toca el borde este u oeste del recorte
-  en algún nivel por debajo de 13,00 m, el script expande el BBOX 0,05° de ese lado y
-  vuelve a correr todo el pipeline (hasta 4 expansiones por lado). El conteo final
-  queda en `index.json` (`expansiones`).
+  en algún nivel por debajo de 20,00 m (el máximo), el script expande el BBOX 0,05°
+  de ese lado y vuelve a correr todo el pipeline (hasta 4 expansiones por lado). El
+  conteo final queda en `index.json` (`expansiones`). El nivel máximo en sí (20,00 m)
+  nunca dispara una expansión: a esa altura es probable que el recorte toque borde
+  igual porque el río no cabe; se registra en `toca_borde`/`bordes` de esa capa en vez
+  de esconderlo (spec 008, S3).
 - El contacto con el borde **norte o sur nunca expande el BBOX**: el río cruza la
   ciudad de norte a sur, así que esos lados van a tocar borde en casi cualquier
   altura modelada. Es esperado y solo se registra como advertencia en el log y en
@@ -131,19 +140,22 @@ Para recalibrar:
 
 ## Presupuesto de tamaño
 
-El total de los `.geojson` debe ser ≤ 15 MB (configurable con `--max-mb`). Si el
-barrido completo de 0,25 m (41 capas) se pasa del presupuesto, el script:
+El total de los `.geojson` debe ser ≤ 25 MB (configurable con `--max-mb`). El barrido
+completo (43 capas: paso 0,25 m hasta 10,50 m, 0,5 m hasta 13,00 m, 1,0 m hasta
+20,00 m) se genera siempre con ese paso fijo; **el paso y el rango de alturas nunca
+cambian para entrar en el presupuesto** (spec 008, S1/S2). Si el resultado se pasa del
+presupuesto, el script:
 
-1. Cambia a paso 0,5 m por encima de 10,50 m (36 capas) y borra los archivos que ya
-   no correspondan.
-2. Si todavía no entra, aumenta la tolerancia de simplificación ×1,5, hasta 3 veces,
-   registrando cada intento en el log.
-3. Si ni así entra, termina con código de salida distinto de cero y un mensaje claro
-   en vez de generar capas fuera de presupuesto en silencio.
+1. Aumenta la tolerancia de simplificación ×1,5, hasta 3 veces, registrando cada
+   intento en el log.
+2. Si ni así entra, termina con código de salida distinto de cero y un mensaje claro
+   en vez de generar capas fuera de presupuesto en silencio. En ese caso, la salida
+   manual documentada más arriba (subir `--min-area-ha` y `--min-hole-ha`) es el
+   siguiente paso, a mano y documentado en la spec — nunca en silencio.
 
-La política de paso elegida (`paso`, siempre con las claves `hasta_1050` y
-`sobre_1050`) y la tolerancia final (`tolerancia_simplificacion`) quedan documentadas
-en `index.json`.
+La política de paso (`paso`, con las claves `hasta_1050`, `sobre_1050` y `sobre_13`)
+y la tolerancia final (`tolerancia_simplificacion`) quedan documentadas en
+`index.json`.
 
 ## Validar a ojo
 

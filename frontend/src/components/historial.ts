@@ -4,6 +4,8 @@ import { getAlturasDiarias } from "../api/alturas";
 import { getEstadisticas } from "../api/estadisticas";
 import type { AlturaDiaria, Evento, RangoAlerta } from "../api/types";
 import { formatDiaSemanaFecha, formatMetros, parseFechaLocal } from "../format";
+import { PALETA, TRAZOS, leerVariableCss } from "../graficos/paleta";
+import { onTemaCambia } from "../theme";
 
 /**
  * `/alturas` rechaza rangos de más de 3 años (contracts/openapi.yaml). Se usa
@@ -102,16 +104,16 @@ const defaultDeps: HistorialDeps = { getAlturasDiarias, getEstadisticas };
 const fechaEjeFormatter = new Intl.DateTimeFormat("es-AR", { month: "short", year: "2-digit" });
 const fechaEventoFormatter = new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "long", year: "numeric" });
 
-function leerColor(variable: string, fallback: string, referencia: HTMLElement): string {
-  const valor = getComputedStyle(referencia).getPropertyValue(variable).trim();
-  return valor || fallback;
-}
-
-function construirHooks(rangos: RangoSombreado[], eventos: EventoPunto[], colorAviso: string, colorReal: string) {
+/**
+ * `colorFranja` ya viene con la opacidad aplicada (`--graf-franja-alerta`,
+ * `color-mix` resuelto en `graficos/paleta.ts`): acá no hay que envolverlo
+ * de nuevo.
+ */
+function construirHooks(rangos: RangoSombreado[], eventos: EventoPunto[], colorFranja: string, colorReal: string) {
   const drawClear = (u: uPlot): void => {
     const { ctx } = u;
     ctx.save();
-    ctx.fillStyle = `color-mix(in srgb, ${colorAviso} 18%, transparent)`;
+    ctx.fillStyle = colorFranja;
     for (const r of rangos) {
       const x0 = Math.max(u.bbox.left, u.valToPos(r.desde, "x", true));
       const x1 = Math.min(u.bbox.left + u.bbox.width, u.valToPos(r.hasta, "x", true));
@@ -155,22 +157,30 @@ function renderListaEventos(container: HTMLUListElement, eventos: EventoPunto[])
     .join("");
 }
 
+export interface MontajeHistorial {
+  /** Desuscribe del cambio de tema y destruye la instancia de uPlot. */
+  destroy(): void;
+}
+
 /**
  * Historial completo (spec 007 T3): desde el primer dato disponible hasta
  * hoy, con los eventos de referencia marcados y los días en alerta
  * sombreados. Carga sus datos de forma independiente (mismo patrón que
  * `mountGrafico`).
  */
-export function mountHistorial(container: HTMLElement, deps: HistorialDeps = defaultDeps): void {
+export function mountHistorial(container: HTMLElement, deps: HistorialDeps = defaultDeps): MontajeHistorial {
   let instancia: uPlot | null = null;
+  let ultimaSeries: HistorialSeries | null = null;
+  let ultimosRangos: RangoSombreado[] = [];
+  let ultimosPuntos: EventoPunto[] = [];
 
   container.innerHTML = `
     <h2>Historial completo</h2>
     <p class="card-subtitulo">Todos los datos de altura real cargados hasta hoy, con las crecidas de referencia marcadas.</p>
     <div class="grafico-canvas" id="historial-canvas"></div>
     <ul class="grafico-leyenda" aria-hidden="true">
-      <li><span class="historial-leyenda-muestra historial-leyenda-muestra--banda"></span> Franja: días en alerta o evacuación</li>
-      <li><span class="historial-leyenda-muestra historial-leyenda-muestra--punto"></span> Punto: crecida de referencia</li>
+      <li><span class="historial-leyenda-muestra historial-leyenda-muestra--banda"></span> Las franjas marcan los días en que hubo alerta</li>
+      <li><span class="historial-leyenda-muestra historial-leyenda-muestra--punto"></span> Los puntos son las crecidas grandes</li>
     </ul>
     <p class="grafico-estado" role="status" aria-live="polite"></p>
     <ul class="historial-eventos" id="historial-eventos"></ul>
@@ -184,7 +194,57 @@ export function mountHistorial(container: HTMLElement, deps: HistorialDeps = def
   const estadoEl = container.querySelector<HTMLParagraphElement>(".grafico-estado");
   const eventosEl = container.querySelector<HTMLUListElement>("#historial-eventos");
   const resumenEl = container.querySelector<HTMLParagraphElement>(".grafico-resumen");
-  if (!canvasEl || !estadoEl || !eventosEl || !resumenEl) return;
+  if (!canvasEl || !estadoEl || !eventosEl || !resumenEl) return { destroy(): void {} };
+
+  /** (Re)dibuja a partir de los datos ya cargados, releyendo la paleta en cada llamada (reactividad al tema). */
+  function dibujar(series: HistorialSeries, rangos: RangoSombreado[], puntos: EventoPunto[]): void {
+    if (!canvasEl) return;
+    const colorReal = leerVariableCss("--graf-altura-real", PALETA.light.alturaReal, container);
+    const colorFranja = leerVariableCss("--graf-franja-alerta", PALETA.light.franjaAlerta, container);
+    const colorEje = leerVariableCss("--graf-eje", PALETA.light.ejeTexto, container);
+    const colorGrilla = leerVariableCss("--graf-grilla", PALETA.light.grilla, container);
+
+    instancia?.destroy();
+    canvasEl.replaceChildren();
+    const width = Math.max(280, canvasEl.clientWidth || container.clientWidth || 320);
+    instancia = new uPlot(
+      {
+        width,
+        height: 240,
+        // Reserva lugar para que el último rótulo del eje X no quede
+        // cortado contra el borde del lienzo (menor, revisión de diseño;
+        // mismo ajuste que `grafico.ts`).
+        padding: [12, 28, 0, 0],
+        scales: { x: { time: true } },
+        series: [{}, { label: "Altura real", stroke: colorReal, width: TRAZOS.alturaReal.widthPx, points: { show: false } }],
+        // L4/M4 (spec 008) + paleta v3: ejes >= 13 px, rol dedicado
+        // `--graf-eje`/`--graf-grilla` (contraste AA en los dos temas) y
+        // menos marcas en el eje X a 360 px.
+        axes: [
+          {
+            font: "13px system-ui, sans-serif",
+            stroke: colorEje,
+            grid: { stroke: colorGrilla, width: 1 },
+            ticks: { stroke: colorGrilla, width: 1 },
+            space: width < 400 ? 70 : 50,
+            values: (_u, splits) => splits.map((s) => fechaEjeFormatter.format(new Date(s * 1000))),
+          },
+          {
+            label: "Altura (metros)",
+            font: "13px system-ui, sans-serif",
+            labelFont: "13px system-ui, sans-serif",
+            stroke: colorEje,
+            grid: { stroke: colorGrilla, width: 1 },
+            ticks: { stroke: colorGrilla, width: 1 },
+          },
+        ],
+        legend: { show: false },
+        hooks: construirHooks(rangos, puntos, colorFranja, colorReal),
+      },
+      [series.x, series.real],
+      canvasEl,
+    );
+  }
 
   async function cargar(): Promise<void> {
     if (!canvasEl || !estadoEl || !eventosEl || !resumenEl) return;
@@ -213,33 +273,29 @@ export function mountHistorial(container: HTMLElement, deps: HistorialDeps = def
     renderListaEventos(eventosEl, puntos);
     resumenEl.textContent = buildResumenTextoHistorial(alturasResult.data, puntos);
 
-    const colorReal = leerColor("--fg", "#1c2430", container);
-    const colorAviso = leerColor("--warn", "#a35d00", container);
-
-    instancia?.destroy();
-    canvasEl.replaceChildren();
-    const width = Math.max(280, canvasEl.clientWidth || container.clientWidth || 320);
-    instancia = new uPlot(
-      {
-        width,
-        height: 240,
-        scales: { x: { time: true } },
-        series: [{}, { label: "Altura real", stroke: colorReal, width: 1.5, points: { show: false } }],
-        axes: [
-          { values: (_u, splits) => splits.map((s) => fechaEjeFormatter.format(new Date(s * 1000))) },
-          { label: "Altura (metros)" },
-        ],
-        legend: { show: false },
-        hooks: construirHooks(rangos, puntos, colorAviso, colorReal),
-      },
-      [series.x, series.real],
-      canvasEl,
-    );
+    ultimaSeries = series;
+    ultimosRangos = rangos;
+    ultimosPuntos = puntos;
+    dibujar(series, rangos, puntos);
   }
 
-  window.addEventListener("resize", () => {
-    if (instancia && canvasEl) instancia.setSize({ width: Math.max(280, canvasEl.clientWidth), height: 240 });
+  const desuscribirTema = onTemaCambia(() => {
+    if (ultimaSeries) dibujar(ultimaSeries, ultimosRangos, ultimosPuntos);
   });
 
+  function manejarResize(): void {
+    if (instancia && canvasEl) instancia.setSize({ width: Math.max(280, canvasEl.clientWidth), height: 240 });
+  }
+  window.addEventListener("resize", manejarResize);
+
   void cargar();
+
+  return {
+    destroy(): void {
+      desuscribirTema();
+      window.removeEventListener("resize", manejarResize);
+      instancia?.destroy();
+      instancia = null;
+    },
+  };
 }

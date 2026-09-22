@@ -1,0 +1,10 @@
+import { chromium } from "@playwright/test";
+const b = await chromium.launch();
+const ctx = await b.newContext({ viewport: { width: 1920, height: 1080 }, colorScheme: "dark", deviceScaleFactor: 2 });
+const p = await ctx.newPage();
+await p.goto(process.env.URL, { waitUntil: "domcontentloaded" });
+await p.waitForSelector(".leaflet-overlay-pane path", { timeout: 30000 }).catch(() => {});
+await p.waitForTimeout(3000);
+await p.locator(".mapa-inundacion-panel-wrap").screenshot({ path: `${process.env.OUT}/panel.png` });
+console.log("panel.png");
+await b.close();

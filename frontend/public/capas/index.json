@@ -1,12 +1,12 @@
 {
-  "generado": "2026-09-21T18:45:08Z",
-  "fuente_dem": "Copernicus DEM GLO-30 (Copernicus_DSM_COG_10_S33_00_W059_00_DEM)",
+  "generado": "2026-09-21T22:41:01Z",
+  "fuente_dem": "Copernicus DEM GLO-30 (Copernicus_DSM_COG_10_S33_00_W059_00_DEM, Copernicus_DSM_COG_10_S33_00_W058_00_DEM)",
   "licencia_dem": "Copernicus DEM © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under COPERNICUS by the European Union and ESA",
   "cero_ign": -0.26,
   "bbox": [
-    -58.25,
+    -58.35,
     -32.35,
-    -58.0,
+    -57.95,
     -32.1
   ],
   "bbox_inicial": [
@@ -17,8 +17,8 @@
   ],
   "margen_ns": 0.05,
   "expansiones": {
-    "este": 1,
-    "oeste": 0
+    "este": 2,
+    "oeste": 2
   },
   "remuestreo": 3,
   "tolerancia_simplificacion": 0.0002,
@@ -33,10 +33,12 @@
   },
   "paso": {
     "hasta_1050": 0.25,
-    "sobre_1050": 0.5
+    "sobre_1050": 0.5,
+    "sobre_13": 1.0
   },
-  "nivel_max": 13.0,
+  "nivel_max": 20.0,
   "nivel_min": 3.0,
+  "crecida_maxima_observada_m": 10.0,
   "clases": [
     {
       "clase": 1,
@@ -56,7 +58,7 @@
       "h": 3.0,
       "archivo": "h_0300.geojson",
       "hectareas": 66.2,
-      "bytes": 19350,
+      "bytes": 19612,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -69,7 +71,7 @@
       "h": 3.25,
       "archivo": "h_0325.geojson",
       "hectareas": 108.8,
-      "bytes": 18685,
+      "bytes": 18376,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -82,7 +84,7 @@
       "h": 3.5,
       "archivo": "h_0350.geojson",
       "hectareas": 162.4,
-      "bytes": 28033,
+      "bytes": 27919,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -95,7 +97,7 @@
       "h": 3.75,
       "archivo": "h_0375.geojson",
       "hectareas": 217.7,
-      "bytes": 37249,
+      "bytes": 36789,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -108,7 +110,7 @@
       "h": 4.0,
       "archivo": "h_0400.geojson",
       "hectareas": 286.8,
-      "bytes": 50880,
+      "bytes": 50425,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -121,7 +123,7 @@
       "h": 4.25,
       "archivo": "h_0425.geojson",
       "hectareas": 385.3,
-      "bytes": 62604,
+      "bytes": 62856,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -134,7 +136,7 @@
       "h": 4.5,
       "archivo": "h_0450.geojson",
       "hectareas": 464.3,
-      "bytes": 79014,
+      "bytes": 79353,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -147,7 +149,7 @@
       "h": 4.75,
       "archivo": "h_0475.geojson",
       "hectareas": 579.6,
-      "bytes": 95278,
+      "bytes": 95418,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -160,7 +162,7 @@
       "h": 5.0,
       "archivo": "h_0500.geojson",
       "hectareas": 709.6,
-      "bytes": 124276,
+      "bytes": 123307,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -173,7 +175,7 @@
       "h": 5.25,
       "archivo": "h_0525.geojson",
       "hectareas": 851.6,
-      "bytes": 147429,
+      "bytes": 147480,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -186,7 +188,7 @@
       "h": 5.5,
       "archivo": "h_0550.geojson",
       "hectareas": 961.6,
-      "bytes": 158540,
+      "bytes": 158552,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -199,7 +201,7 @@
       "h": 5.75,
       "archivo": "h_0575.geojson",
       "hectareas": 1073.6,
-      "bytes": 177119,
+      "bytes": 176884,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -212,7 +214,7 @@
       "h": 6.0,
       "archivo": "h_0600.geojson",
       "hectareas": 1424.3,
-      "bytes": 215479,
+      "bytes": 216060,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -225,7 +227,7 @@
       "h": 6.25,
       "archivo": "h_0625.geojson",
       "hectareas": 1884.9,
-      "bytes": 257648,
+      "bytes": 257919,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -238,7 +240,7 @@
       "h": 6.5,
       "archivo": "h_0650.geojson",
       "hectareas": 2030.7,
-      "bytes": 273769,
+      "bytes": 273713,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -251,7 +253,7 @@
       "h": 6.75,
       "archivo": "h_0675.geojson",
       "hectareas": 2205.2,
-      "bytes": 280000,
+      "bytes": 280546,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -264,7 +266,7 @@
       "h": 7.0,
       "archivo": "h_0700.geojson",
       "hectareas": 3075.8,
-      "bytes": 353178,
+      "bytes": 351510,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -277,7 +279,7 @@
       "h": 7.25,
       "archivo": "h_0725.geojson",
       "hectareas": 3408.8,
-      "bytes": 376373,
+      "bytes": 375661,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -290,7 +292,7 @@
       "h": 7.5,
       "archivo": "h_0750.geojson",
       "hectareas": 3722.0,
-      "bytes": 397215,
+      "bytes": 396427,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -303,7 +305,7 @@
       "h": 7.75,
       "archivo": "h_0775.geojson",
       "hectareas": 4140.3,
-      "bytes": 423530,
+      "bytes": 422303,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -316,7 +318,7 @@
       "h": 8.0,
       "archivo": "h_0800.geojson",
       "hectareas": 4514.7,
-      "bytes": 456200,
+      "bytes": 456528,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -329,7 +331,7 @@
       "h": 8.25,
       "archivo": "h_0825.geojson",
       "hectareas": 5379.0,
-      "bytes": 551076,
+      "bytes": 550760,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -342,7 +344,7 @@
       "h": 8.5,
       "archivo": "h_0850.geojson",
       "hectareas": 6022.3,
-      "bytes": 601592,
+      "bytes": 602539,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -355,7 +357,7 @@
       "h": 8.75,
       "archivo": "h_0875.geojson",
       "hectareas": 6484.7,
-      "bytes": 634232,
+      "bytes": 634799,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -368,7 +370,7 @@
       "h": 9.0,
       "archivo": "h_0900.geojson",
       "hectareas": 7108.2,
-      "bytes": 677938,
+      "bytes": 677614,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -381,7 +383,7 @@
       "h": 9.25,
       "archivo": "h_0925.geojson",
       "hectareas": 7683.4,
-      "bytes": 714420,
+      "bytes": 714784,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -394,7 +396,7 @@
       "h": 9.5,
       "archivo": "h_0950.geojson",
       "hectareas": 8196.4,
-      "bytes": 729587,
+      "bytes": 728315,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -407,7 +409,7 @@
       "h": 9.75,
       "archivo": "h_0975.geojson",
       "hectareas": 8690.5,
-      "bytes": 741234,
+      "bytes": 742263,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -420,7 +422,7 @@
       "h": 10.0,
       "archivo": "h_1000.geojson",
       "hectareas": 9523.1,
-      "bytes": 771330,
+      "bytes": 772131,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -433,7 +435,7 @@
       "h": 10.25,
       "archivo": "h_1025.geojson",
       "hectareas": 10001.1,
-      "bytes": 770559,
+      "bytes": 769897,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -446,7 +448,7 @@
       "h": 10.5,
       "archivo": "h_1050.geojson",
       "hectareas": 10495.6,
-      "bytes": 780585,
+      "bytes": 780336,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -459,7 +461,7 @@
       "h": 11.0,
       "archivo": "h_1100.geojson",
       "hectareas": 11348.4,
-      "bytes": 746884,
+      "bytes": 745642,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -472,7 +474,7 @@
       "h": 11.5,
       "archivo": "h_1150.geojson",
       "hectareas": 12185.8,
-      "bytes": 719857,
+      "bytes": 720235,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -485,7 +487,7 @@
       "h": 12.0,
       "archivo": "h_1200.geojson",
       "hectareas": 13047.8,
-      "bytes": 712535,
+      "bytes": 713306,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -498,7 +500,7 @@
       "h": 12.5,
       "archivo": "h_1250.geojson",
       "hectareas": 13845.3,
-      "bytes": 691314,
+      "bytes": 691232,
       "toca_borde": true,
       "bordes": {
         "norte": true,
@@ -511,7 +513,98 @@
       "h": 13.0,
       "archivo": "h_1300.geojson",
       "hectareas": 14613.1,
-      "bytes": 686498,
+      "bytes": 685847,
+      "toca_borde": true,
+      "bordes": {
+        "norte": true,
+        "sur": true,
+        "oeste": false,
+        "este": false
+      }
+    },
+    {
+      "h": 14.0,
+      "archivo": "h_1400.geojson",
+      "hectareas": 16444.3,
+      "bytes": 689368,
+      "toca_borde": true,
+      "bordes": {
+        "norte": true,
+        "sur": true,
+        "oeste": false,
+        "este": false
+      }
+    },
+    {
+      "h": 15.0,
+      "archivo": "h_1500.geojson",
+      "hectareas": 17955.2,
+      "bytes": 645364,
+      "toca_borde": true,
+      "bordes": {
+        "norte": true,
+        "sur": true,
+        "oeste": false,
+        "este": false
+      }
+    },
+    {
+      "h": 16.0,
+      "archivo": "h_1600.geojson",
+      "hectareas": 19407.2,
+      "bytes": 617666,
+      "toca_borde": true,
+      "bordes": {
+        "norte": true,
+        "sur": true,
+        "oeste": false,
+        "este": false
+      }
+    },
+    {
+      "h": 17.0,
+      "archivo": "h_1700.geojson",
+      "hectareas": 20832.0,
+      "bytes": 598626,
+      "toca_borde": true,
+      "bordes": {
+        "norte": true,
+        "sur": true,
+        "oeste": false,
+        "este": false
+      }
+    },
+    {
+      "h": 18.0,
+      "archivo": "h_1800.geojson",
+      "hectareas": 22349.6,
+      "bytes": 594036,
+      "toca_borde": true,
+      "bordes": {
+        "norte": true,
+        "sur": true,
+        "oeste": false,
+        "este": false
+      }
+    },
+    {
+      "h": 19.0,
+      "archivo": "h_1900.geojson",
+      "hectareas": 24157.6,
+      "bytes": 645725,
+      "toca_borde": true,
+      "bordes": {
+        "norte": true,
+        "sur": true,
+        "oeste": false,
+        "este": false
+      }
+    },
+    {
+      "h": 20.0,
+      "archivo": "h_2000.geojson",
+      "hectareas": 26093.5,
+      "bytes": 669044,
       "toca_borde": true,
       "bordes": {
         "norte": true,

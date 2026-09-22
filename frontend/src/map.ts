@@ -6,6 +6,7 @@ import {
   type CapaIndex,
   createCapaCache,
   createEstadoMapa,
+  describeMostrando,
   type EstadoMapa,
   fetchCapaIndex,
   type MedicionActual,
@@ -137,8 +138,7 @@ function crearResumenSiempreVisible(container: HTMLElement, index: CapaIndex): P
 
   return {
     render(vista) {
-      const actual = vista.textos.actual ?? "sin dato todavía";
-      mostrandoEl.textContent = `Mostrando: si el río llega a ${vista.textos.altura} — hoy está en ${actual}.`;
+      mostrandoEl.textContent = describeMostrando(vista);
     },
   };
 }
@@ -146,13 +146,21 @@ function crearResumenSiempreVisible(container: HTMLElement, index: CapaIndex): P
 function crearPanel(container: HTMLElement, index: CapaIndex, estado: EstadoMapa): Panel {
   // Spec 007 M2: el panel es un `<details>` plegable *fuera* del lienzo del
   // mapa (ver `createMap`, que ya no lo pasa como hijo del contenedor de
-  // Leaflet), así nunca tapa la ciudad. Abierto por defecto en escritorio
-  // (donde hay lugar de sobra); plegado en mobile para priorizar el mapa
-  // (M1); el usuario puede alternarlo en cualquier ancho.
+  // Leaflet), así nunca tapa la ciudad.
+  //
+  // Defecto G2 (revisión de diseño): antes arrancaba plegado en mobile y
+  // tablet (`< 900px`) para "priorizar el mapa" — pero eso dejaba el slider
+  // y los escenarios invisibles justo donde más se usa la app (el celular),
+  // así que se perdía la mitad del producto ("¿a qué altura se moja mi
+  // casa?") detrás de un título que no explicaba qué hacía. Ahora arranca
+  // abierto en cualquier ancho; sigue plegable para quien solo quiera ver el
+  // mapa, con un texto que dice qué pasa al tocarlo y un chevron (ver
+  // `.capas-panel-resumen::after` en style.css) en vez de depender del
+  // triángulo nativo de `<summary>` (que `display:flex` ya le saca).
   const detalles = L.DomUtil.create("details", "capas-panel", container);
-  detalles.open = window.matchMedia("(min-width: 900px)").matches;
+  detalles.open = true;
   const resumen = L.DomUtil.create("summary", "capas-panel-resumen", detalles);
-  resumen.textContent = "Altura y zonas inundables";
+  resumen.textContent = "Ver el mapa a otra altura";
   const panel = L.DomUtil.create("div", "capas-panel-contenido", detalles);
   L.DomEvent.disableClickPropagation(panel);
   L.DomEvent.disableScrollPropagation(panel);
@@ -182,6 +190,16 @@ function crearPanel(container: HTMLElement, index: CapaIndex, estado: EstadoMapa
   escenariosEl.setAttribute("role", "group");
   escenariosEl.setAttribute("aria-label", "Escenarios");
 
+  // Menor (revisión de diseño): el degradé + flecha del borde derecho
+  // (`.capas-escenarios::before/::after`) son un indicador de "hay más
+  // chips", así que tienen que desaparecer cuando ya se llegó al final del
+  // scroll (si no, quedan mintiendo que hay más).
+  function actualizarIndicadorScroll(): void {
+    const alFinal = escenariosEl.scrollLeft + escenariosEl.clientWidth >= escenariosEl.scrollWidth - 2;
+    escenariosEl.classList.toggle("capas-escenarios--fin", alFinal);
+  }
+  escenariosEl.addEventListener("scroll", actualizarIndicadorScroll, { passive: true });
+
   const botones = new Map<string, HTMLButtonElement>();
   for (const escenario of estado.escenarios()) {
     const boton = L.DomUtil.create("button", "capas-escenario", escenariosEl);
@@ -195,6 +213,7 @@ function crearPanel(container: HTMLElement, index: CapaIndex, estado: EstadoMapa
     });
     botones.set(escenario.id, boton);
   }
+  actualizarIndicadorScroll();
 
   // La leyenda de profundidad vive en `crearResumenSiempreVisible`, fuera de
   // este panel colapsable, para que se vea sin abrir nada (ítem 3).

@@ -13,10 +13,10 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from generar_capas import (  # noqa: E402
+    DEFAULT_STEP_POLICY,
     base_river_mask,
     classify_depth,
     clean_mask,
-    decide_step_policy,
     edge_contact,
     expand_bbox,
     flood_mask,
@@ -127,26 +127,16 @@ def test_edge_contact_no_touch() -> None:
     assert contact == {"norte": False, "sur": False, "oeste": False, "este": False}
 
 
-def test_decide_step_policy_within_budget() -> None:
-    assert decide_step_policy(total_bytes=1_000, max_bytes=15 * 1024 * 1024) == {
-        "hasta_1050": 0.25,
-        "sobre_1050": 0.25,
-    }
-
-
-def test_decide_step_policy_over_budget() -> None:
-    policy = decide_step_policy(total_bytes=20 * 1024 * 1024, max_bytes=15 * 1024 * 1024)
-    assert policy == {"hasta_1050": 0.25, "sobre_1050": 0.5}
-
-
-def test_plan_levels_uniform_has_41_levels() -> None:
+def test_plan_levels_uniform_has_69_levels_up_to_20() -> None:
     levels = plan_levels(0.25)
-    assert len(levels) == 41
+    assert len(levels) == 69
     assert levels[0] == 3.0
-    assert levels[-1] == 13.0
+    assert levels[-1] == 20.0
 
 
-def test_plan_levels_mixed_has_36_levels() -> None:
+def test_plan_levels_two_tier_dict_without_sobre_13_stops_at_13() -> None:
+    # Backward-compatible shape: a dict without "sobre_13" stops the level set at
+    # min(split_level_2, max_level) instead of continuing to max_level.
     levels = plan_levels({"hasta_1050": 0.25, "sobre_1050": 0.5})
     assert len(levels) == 36
     assert levels[0] == 3.0
@@ -154,6 +144,30 @@ def test_plan_levels_mixed_has_36_levels() -> None:
     assert 10.5 in levels
     assert 11.0 in levels
     assert 10.75 not in levels  # only every 0.5 above 10.50
+
+
+def test_plan_levels_three_tier_default_policy_reaches_20() -> None:
+    # Spec 008 S1: 0.25 m up to 10.50, 0.5 m up to 13.00, 1.0 m up to 20.00.
+    levels = plan_levels(DEFAULT_STEP_POLICY)
+    assert len(levels) == 43
+    assert levels[0] == 3.0
+    assert levels[-1] == 20.0
+    assert 10.5 in levels
+    assert 10.75 not in levels  # only every 0.5 between 10.50 and 13.00
+    assert 13.0 in levels
+    assert 13.5 not in levels  # only every 1.0 above 13.00
+    assert 14.0 in levels
+    assert 20.0 in levels
+
+
+def test_plan_levels_three_tier_default_policy_matches_step_boundaries() -> None:
+    levels = plan_levels(DEFAULT_STEP_POLICY)
+    hasta_1050 = [lv for lv in levels if lv <= 10.5]
+    entre_1050_13 = [lv for lv in levels if 10.5 < lv <= 13.0]
+    sobre_13 = [lv for lv in levels if lv > 13.0]
+    assert hasta_1050 == pytest.approx([3.0 + 0.25 * i for i in range(31)])
+    assert entre_1050_13 == pytest.approx([11.0, 11.5, 12.0, 12.5, 13.0])
+    assert sobre_13 == pytest.approx([14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0])
 
 
 def test_expand_bbox_only_moves_east_west() -> None:

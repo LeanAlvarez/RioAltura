@@ -58,7 +58,7 @@ function renderTabla(filas: FilaCaudal[]): string {
 export function renderDetalleTecnico(container: HTMLElement, view: DetalleTecnicoView): void {
   container.innerHTML = `
     <details class="detalle-tecnico">
-      <summary>Detalle técnico</summary>
+      <summary>Cómo se hacen estos números</summary>
       <div class="detalle-tecnico-contenido">
         <h3>Colón</h3>
         <p class="card-subtitulo">

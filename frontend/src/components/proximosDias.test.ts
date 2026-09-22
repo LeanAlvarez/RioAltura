@@ -15,6 +15,14 @@ const SIN_ANCLAJE: Anclaje = {
   motivo: "No hay altura real disponible para hoy",
 };
 
+const CON_ANCLAJE: Anclaje = {
+  aplicado: true,
+  sesgo_m: 0.62,
+  altura_real_m: 4.29,
+  fecha_referencia: "2026-09-21",
+  motivo: null,
+};
+
 function dia(overrides: Partial<DiaPronostico> = {}): DiaPronostico {
   return {
     fecha: "2026-09-22",
@@ -191,7 +199,7 @@ describe("deriveProximosDiasView", () => {
         data: pronostico([
           dia({ fecha: "2026-09-21", lead_dias: 1, altura_anclada_m: 4.29 }),
           dia({ fecha: "2026-09-22", lead_dias: 2, altura_anclada_min_m: 3.3, altura_anclada_max_m: 5.3 }),
-        ]),
+        ], "sin_aviso", CON_ANCLAJE),
       },
       hoy,
     );
@@ -227,4 +235,29 @@ describe("deriveProximosDiasView", () => {
     if (view.kind !== "ready") return;
     expect(view.anclajeTexto).toBeNull();
   });
+
+  it("sin anclaje, la fila de hoy muestra rango: una estimación no se rotula 'medido'", () => {
+    // Bug visto con datos reales: el worker no había traído la altura de hoy,
+    // así que `anclaje.aplicado` era false y `altura_anclada_m` era la
+    // estimación pura de la curva. La fila igual decía "3,93 m medido", o sea
+    // presentaba un pronóstico como una medición.
+    const hoy = new Date(2026, 8, 22);
+    const view = deriveProximosDiasView(
+      {
+        kind: "ok",
+        data: pronostico(
+          [dia({ fecha: "2026-09-22", lead_dias: 1, altura_anclada_m: 3.93 })],
+          "sin_aviso",
+          SIN_ANCLAJE,
+        ),
+      },
+      hoy,
+    );
+    expect(view.kind).toBe("ready");
+    if (view.kind !== "ready") return;
+    expect(view.dias[0]?.dia).toBe("Hoy");
+    expect(view.dias[0]?.medido).toBeNull();
+    expect(view.dias[0]?.rango).toMatch(/^entre .+ y .+ m$/);
+  });
+
 });

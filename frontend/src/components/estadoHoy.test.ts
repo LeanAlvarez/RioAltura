@@ -40,6 +40,7 @@ describe("deriveEstadoHoyView", () => {
     );
     expect(view).toEqual({
       kind: "ready",
+      alturaM: 4.29,
       altura: "4,29 m",
       estadoLabel: "Normal",
       estadoTono: "ok",

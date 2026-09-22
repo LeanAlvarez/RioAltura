@@ -1,4 +1,7 @@
-/** Pie de página: disclaimer y atribuciones obligatorias (CLAUDE.md sección 7). */
+/**
+ * Pie de página (CLAUDE.md sección 7; spec 008, sección F): centrado, con el
+ * disclaimer arriba, las atribuciones debajo y la autoría al final.
+ */
 export function renderPie(container: HTMLElement): void {
   container.innerHTML = `
     <p class="disclaimer">
@@ -9,6 +12,9 @@ export function renderPie(container: HTMLElement): void {
     <p class="attribution">
       Datos: Google Flood Forecasting (<a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener" target="_blank">CC BY 4.0</a>),
       Copernicus DEM, INA. Mapa: &copy; OpenStreetMap contributors, &copy; CARTO, &copy; Esri.
+    </p>
+    <p class="autoria">
+      Desarrollado por <a href="https://miraisoftware.net" rel="noopener" target="_blank">Mirai Software</a> en y para la ciudad de Colón, Entre Ríos.
     </p>
   `;
 }

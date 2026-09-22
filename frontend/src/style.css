@@ -1,3 +1,10 @@
+/*
+ * Tema claro/oscuro (spec 008, T1-T3): todos los colores viven acá, como
+ * tokens CSS. Por defecto sigue `prefers-color-scheme` (bloque de abajo);
+ * `[data-theme="light"]`/`[data-theme="dark"]` en <html> es la elección
+ * explícita del usuario (ver src/theme.ts) y siempre gana, tanto si coincide
+ * con el sistema como si no.
+ */
 :root {
   --bg: #f6f7f9;
   --card-bg: #ffffff;
@@ -24,7 +31,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #12161c;
     --card-bg: #1a2029;
     --fg: #e7ebf0;
@@ -38,6 +45,22 @@
     --accent: #6fb3e0;
     --skeleton: #232b36;
   }
+}
+
+/* Elección explícita del usuario (T2): gana aunque el sistema esté en modo claro. */
+:root[data-theme="dark"] {
+  --bg: #12161c;
+  --card-bg: #1a2029;
+  --fg: #e7ebf0;
+  --muted: #9aa4b2;
+  --border: #2a323d;
+  --ok: #4ade80;
+  --warn: #f2b84b;
+  --error: #f2726b;
+  --danger: #ff8a80;
+  --danger-etiqueta: #e39cff;
+  --accent: #6fb3e0;
+  --skeleton: #232b36;
 }
 
 * {
@@ -63,7 +86,7 @@ body {
 .topbar {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
   padding: 0.75rem 1rem;
@@ -74,6 +97,43 @@ body {
 .topbar h1 {
   margin: 0;
   font-size: 1.15rem;
+}
+
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+.topbar-link {
+  color: var(--fg);
+  font-size: 0.85rem;
+  text-decoration: underline;
+  /* M1: blanco de toque >= 44 px, aunque el texto sea chico. */
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* T1: toggle de tema, visible en el header (sol/luna, con aria-label y aria-pressed). */
+.theme-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-toggle:hover {
+  background: var(--skeleton);
 }
 
 .health {
@@ -99,36 +159,127 @@ body {
   content: "● ";
 }
 
+/*
+ * Grilla explícita por breakpoint (spec 008, L1-L3): nombres de área fijos,
+ * asignados una vez más abajo por id/clase; solo cambian `grid-template-*`
+ * acá. Ninguna celda queda vacía en ningún breakpoint (L3): "Qué hacer"
+ * (#tarjeta-que-hacer) sigue con `hidden` y a propósito no tiene área
+ * asignada, para no dejar un hueco mientras el flag esté apagado.
+ *
+ * L1: ancho completo, márgenes laterales <= 24 px (el padding de acá nunca
+ * pasa 1.5rem = 24px); si se pone tope de ancho, siempre >= 1800 px.
+ */
 .dashboard {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-areas:
+    "hoy"
+    "proximos"
+    "mapa"
+    "mapa-disclaimer"
+    "superficie"
+    "grafico"
+    "umbrales"
+    "aguas-arriba"
+    "contexto"
+    "historial"
+    "precision"
+    "faq"
+    "detalle";
+  align-items: stretch;
   gap: 0.75rem;
   padding: 0.75rem;
-  max-width: 720px;
   width: 100%;
   margin: 0 auto;
 }
 
-/* Spec 007: desde 900 px, grilla de dos columnas con el mapa ocupando el
-   ancho completo (spans both columns) en vez de una franja angosta. */
-@media (min-width: 900px) {
+/* L2, 768-1279 px: dos columnas, misma lógica de agrupación que en escritorio. */
+@media (min-width: 768px) {
   .dashboard {
-    display: grid;
     grid-template-columns: 1fr 1fr;
-    align-items: start;
-    max-width: 1200px;
     gap: 1rem;
-    padding: 1.5rem;
-  }
-
-  .dashboard > .card--mapa,
-  .dashboard > .disclaimer-corta--mapa {
-    grid-column: 1 / -1;
+    padding: 1.25rem;
+    grid-template-areas:
+      "hoy proximos"
+      "umbrales umbrales"
+      "mapa mapa"
+      "mapa-disclaimer mapa-disclaimer"
+      "superficie superficie"
+      "grafico aguas-arriba"
+      "grafico contexto"
+      "historial precision"
+      "faq faq"
+      "detalle detalle";
   }
 }
 
+/*
+ * L2, >= 1280 px: tres columnas. Fila 1 con Hoy/Próximos días/Niveles a la
+ * misma altura (L3, `align-items: stretch` de arriba); fila 2 el mapa a
+ * ancho completo (70vh, ver `.mapa-inundacion-lienzo`) con la curva de
+ * superficie afectada como panel lateral derecho (el propio slider y los
+ * escenarios del mapa se acomodan como panel lateral interno, ver más abajo
+ * "Mapa de inundación"); fila 3 evolución (2/3) con aguas arriba + contexto
+ * apilados (1/3); fila 4 historial (2/3) + precisión (1/3); FAQ y detalle a
+ * ancho completo.
+ */
+@media (min-width: 1280px) {
+  .dashboard {
+    grid-template-columns: repeat(3, 1fr);
+    max-width: 1900px;
+    padding: 1.5rem;
+    grid-template-areas:
+      "hoy proximos umbrales"
+      "mapa mapa mapa"
+      "mapa-disclaimer mapa-disclaimer mapa-disclaimer"
+      "superficie superficie superficie"
+      "grafico grafico aguas-arriba"
+      "grafico grafico contexto"
+      "historial historial precision"
+      "faq faq faq"
+      "detalle detalle detalle";
+  }
+}
+
+#tarjeta-hoy {
+  grid-area: hoy;
+}
+#tarjeta-proximos {
+  grid-area: proximos;
+}
+#tarjeta-umbrales {
+  grid-area: umbrales;
+}
+#tarjeta-grafico {
+  grid-area: grafico;
+}
+#tarjeta-mapa {
+  grid-area: mapa;
+}
+#tarjeta-superficie {
+  grid-area: superficie;
+}
+#tarjeta-aguas-arriba {
+  grid-area: aguas-arriba;
+}
+#tarjeta-contexto {
+  grid-area: contexto;
+}
+#tarjeta-historial {
+  grid-area: historial;
+}
+#tarjeta-precision {
+  grid-area: precision;
+}
+#faq {
+  grid-area: faq;
+}
+#tarjeta-detalle {
+  grid-area: detalle;
+}
+
 .disclaimer-corta--mapa {
+  grid-area: mapa-disclaimer;
   margin-top: -0.25rem;
   padding: 0 0.25rem;
   border-top: none;
@@ -187,6 +338,108 @@ body {
 }
 
 /* --- Tarjeta Hoy --- */
+
+/*
+ * L5 (spec 008): "Hoy" + regla hidrométrica en una sola tarjeta. Grid de dos
+ * columnas (contenido + regla, angosta) en vez de un breakpoint fijo, para
+ * que funcione a cualquier ancho de celda, incluida la columna única de
+ * mobile (a 360 px la regla ocupa ~70 px y sigue siendo legible).
+ */
+.estado-hoy-layout {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.regla-hidrometrica {
+  display: flex;
+  width: 9rem;
+  max-width: 45vw;
+}
+
+.regla-hidrometrica-eje {
+  position: relative;
+  width: 100%;
+}
+
+.regla-hidrometrica-eje::before {
+  content: "";
+  position: absolute;
+  top: 0.25rem;
+  bottom: 0.25rem;
+  left: 0;
+  width: 0.35rem;
+  background: var(--border);
+  border-radius: 999px;
+}
+
+.regla-marcas {
+  position: relative;
+  height: 100%;
+  min-height: 12rem;
+}
+
+/*
+ * Línea guía entre un tick y su etiqueta cuando quedaron separados (defecto
+ * G1, revisión de diseño): sin esto, una etiqueta desplazada no tenía forma
+ * de saber a qué marca correspondía. `preserveAspectRatio="none"` porque el
+ * viewBox es 100x100 pero el elemento real es angosto (9rem) y alto (>=
+ * 12rem): las líneas son solo una referencia visual, no tienen que ser
+ * geométricamente exactas.
+ */
+.regla-guias {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.regla-marca-guia {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 2, 2;
+}
+
+.regla-marca-guia.regla-marca--hoy {
+  stroke: var(--accent);
+}
+
+/*
+ * Tick y texto son elementos independientes (ver `reglaHidrometrica.ts`): el
+ * tick siempre a la altura exacta a escala (`posicionPct`); el texto en la
+ * posición ya separada para no superponerse (`etiquetaPosicionPct`).
+ */
+.regla-marca-tick {
+  position: absolute;
+  left: 0;
+  transform: translateY(50%);
+  width: 0.6rem;
+  height: 2px;
+  background: var(--warn);
+}
+
+.regla-marca-texto {
+  position: absolute;
+  left: 0.8rem;
+  right: 0;
+  transform: translateY(50%);
+  font-size: 0.8125rem;
+  line-height: 1.15;
+  color: var(--fg);
+}
+
+.regla-marca-tick.regla-marca--hoy {
+  width: 0.85rem;
+  height: 3px;
+  background: var(--accent);
+}
+
+.regla-marca-texto.regla-marca--hoy {
+  font-weight: 700;
+  color: var(--accent);
+}
 
 .altura-actual {
   font-size: 2.75rem;
@@ -328,6 +581,8 @@ body {
   padding: 0.3rem 0.6rem;
   font-size: 0.85rem;
   cursor: pointer;
+  /* M1: blanco de toque >= 44 px. */
+  min-height: 44px;
 }
 
 .rango-selector button[aria-pressed="true"] {
@@ -373,9 +628,24 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  background: color-mix(in srgb, var(--card-bg) 85%, transparent);
+  /*
+   * Opaco, no traslúcido (menor, revisión de diseño a 768 px): a 85 % la
+   * línea de "Altura real" se seguía viendo *a través* de la etiqueta
+   * cuando pasaba cerca de un umbral ("la etiqueta pisa la curva"). El
+   * texto siempre arranca con el número (ver `grafico.ts`), así que si el
+   * ancho angosto de mobile corta algo, corta el nombre, nunca el dato.
+   */
+  background: var(--card-bg);
+  border: 1px solid var(--border);
   border-radius: 3px;
   pointer-events: none;
+}
+
+@media (max-width: 480px) {
+  .grafico-umbral-etiqueta {
+    max-width: 62%;
+    font-size: 0.64rem;
+  }
 }
 
 .grafico-tooltip {
@@ -410,15 +680,17 @@ body {
   gap: 0.35rem;
 }
 
+/*
+ * Paleta v3 (spec 008 seguimiento): el fondo (sólido o
+ * `repeating-linear-gradient`) y el alto vienen inline desde
+ * `graficos/paleta.ts` (`fondoTrazoCss`), para que la muestra reproduzca
+ * exactamente el color, grosor y patrón de guiones de su línea — nunca
+ * puede desincronizarse de la paleta porque no hay valores propios acá.
+ */
 .grafico-leyenda-linea {
   display: inline-block;
   width: 1.1rem;
-  height: 0;
-  border-top: 2.5px solid var(--color-linea);
-}
-
-.grafico-leyenda-linea--punteada {
-  border-top-style: dashed;
+  border-radius: 1px;
 }
 
 .grafico-estado {
@@ -468,13 +740,14 @@ body {
 }
 
 .historial-leyenda-muestra--banda {
-  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  /* `--graf-franja-alerta` ya trae la opacidad aplicada (paleta.ts). */
+  background: var(--graf-franja-alerta);
   border-radius: 2px;
 }
 
 .historial-leyenda-muestra--punto {
   border-radius: 50%;
-  background: var(--fg);
+  background: var(--graf-altura-real);
   border: 2px solid var(--card-bg);
   box-shadow: 0 0 0 1px var(--border);
 }
@@ -488,6 +761,14 @@ body {
 /* --- Aguas arriba (T5) --- */
 
 /* Reusa .frase-pronostico y .tendencia de la tarjeta "Próximos días". */
+
+/*
+ * Mini gráfico "Colón vs aguas arriba" (paleta v3): llena el hueco que
+ * dejaba la tarjeta con solo texto (diagnóstico de esta tarea).
+ */
+.aguas-arriba-chart-wrap {
+  margin-top: 0.75rem;
+}
 
 /* --- Contexto (T6) --- */
 
@@ -541,10 +822,36 @@ body {
 
 /* --- Superficie afectada (T7) --- */
 
+/*
+ * "Superficie afectada" comparte fila con el mapa a >= 1280 px (el mapa
+ * fuerza 70vh), y `.dashboard{align-items:stretch}` estira la tarjeta a esa
+ * misma altura: sin esto quedaban ~270-320 px vacíos abajo de la curva
+ * (blanco grande, revisión de diseño). `flex-direction:column` acá y
+ * `flex:1` en el SVG hace que el gráfico crezca para ocupar ese alto extra
+ * cuando existe (a los demás anchos, sin altura extra que repartir, el SVG
+ * se queda en su `min-height`, igual que antes).
+ */
+#tarjeta-superficie {
+  display: flex;
+  flex-direction: column;
+}
+
 .superficie-svg {
+  /* El alto lo fija el componente en línea, para que el viewBox y los
+     píxeles coincidan y `preserveAspectRatio="none"` no deforme el texto. */
   width: 100%;
-  height: auto;
   margin: 0.5rem 0;
+}
+
+.superficie-curva-maximo-linea {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3, 3;
+}
+
+.superficie-curva-maximo-etiqueta {
+  font-size: 11px;
+  fill: var(--muted);
 }
 
 .superficie-curva-linea {
@@ -559,15 +866,19 @@ body {
   stroke-width: 2;
 }
 
-/* Rótulos de eje (ítem 9, correcciones de diseño): metros abajo, hectáreas al costado. */
+/*
+ * Rótulos de eje (ítem 9, correcciones de diseño; L4 spec 008): metros abajo,
+ * hectáreas al costado. >= 13 px y con --fg (no --muted) para contraste AA
+ * en los dos temas.
+ */
 .superficie-eje-etiqueta {
-  font-size: 8px;
-  fill: var(--muted);
+  font-size: 13px;
+  fill: var(--fg);
 }
 
 .superficie-slider {
   width: 100%;
-  height: 40px;
+  height: 44px;
   touch-action: pan-y;
 }
 
@@ -579,6 +890,75 @@ body {
   color: var(--muted);
 }
 
+/* --- FAQ (spec 008, Q) --- */
+
+.faq-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.faq-item {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0 0.75rem;
+}
+
+.faq-pregunta {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--fg);
+}
+
+/*
+ * Chevron visible (defecto G4, revisión de diseño): `display:flex` en
+ * `<summary>` ya elimina el triángulo nativo del navegador, así que sin esto
+ * no quedaba ninguna señal de que la pregunta se puede tocar. Rota al abrir.
+ */
+.faq-pregunta::after,
+.detalle-tecnico summary::after,
+.capas-panel-resumen::after {
+  content: "▾";
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.15s ease;
+}
+
+.faq-item[open] > .faq-pregunta::after,
+.detalle-tecnico[open] > summary::after,
+.capas-panel[open] > .capas-panel-resumen::after {
+  transform: rotate(180deg);
+}
+
+/* A dos columnas en pantallas anchas (blancos grandes, revisión de diseño):
+   a 1920 px, 11 preguntas cortas en una sola columna dejaban barras de casi
+   1820 px de ancho para renglones de pocas palabras. */
+@media (min-width: 1280px) {
+  .faq-lista {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem 1rem;
+  }
+}
+
+.faq-respuesta {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--fg);
+  line-height: 1.5;
+}
+
+.faq-respuesta a {
+  color: var(--accent);
+}
+
 /* --- Detalle técnico (T8) --- */
 
 .card--detalle {
@@ -587,6 +967,11 @@ body {
 
 .detalle-tecnico summary {
   cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   font-weight: 600;
   color: var(--muted);
   text-transform: uppercase;
@@ -636,14 +1021,49 @@ body {
   flex-direction: column;
 }
 
+/* M2: 60vh en mobile, con el panel de controles debajo (nunca superpuesto). */
 .mapa-inundacion-lienzo {
   min-height: 60dvh;
   position: relative;
 }
 
-@media (min-width: 900px) {
+/*
+ * L2 (>= 1280 px): lienzo a 70vh con los controles en un panel lateral
+ * derecho. Probamos ponerlos debajo del mapa para ganar ancho, y se pierde
+ * la idea: nadie baja a buscar un slider que no ve, así que se pierde
+ * "¿a qué altura se moja mi casa?". Al costado están a la vista mientras se
+ * mira el mapa. El ancho no se sacrifica: la curva de hectáreas se mudó a su
+ * propia fila a lo largo, así que el lienzo queda más ancho que cuando
+ * compartía la fila con ella. La estructura DOM no cambia (spec 006): acá
+ * sólo se reacomoda con grid, sin tocar map.ts.
+ */
+@media (min-width: 1280px) {
+  .mapa-inundacion-root {
+    display: grid;
+    grid-template-columns: 1fr minmax(300px, 22%);
+    grid-template-rows: auto 1fr;
+    align-items: stretch;
+  }
+
   .mapa-inundacion-lienzo {
-    min-height: 75dvh;
+    grid-column: 1;
+    grid-row: 1 / 3;
+    min-height: 70dvh;
+  }
+
+  .mapa-inundacion-resumen-wrap {
+    grid-column: 2;
+    grid-row: 1;
+    border-top: none;
+    border-left: 1px solid var(--border);
+  }
+
+  .mapa-inundacion-panel-wrap {
+    grid-column: 2;
+    grid-row: 2;
+    border-top: none;
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
   }
 }
 
@@ -732,26 +1152,28 @@ body {
 
 /* --- Pie --- */
 
+/* F (spec 008): centrado, disclaimer arriba, atribuciones debajo, autoría al final. */
 .footer {
   padding: 0.75rem 1rem;
   font-size: 0.8rem;
   color: var(--muted);
   background: var(--card-bg);
   border-top: 1px solid var(--border);
+  text-align: center;
 }
 
 .footer p {
-  margin: 0.25rem 0;
+  margin: 0.25rem auto;
+  max-width: 60rem;
 }
 
 .footer a {
   color: inherit;
 }
 
-@media (min-width: 720px) {
-  .dashboard {
-    padding: 1.5rem;
-  }
+.footer .autoria {
+  margin-top: 0.5rem;
+  font-weight: 600;
 }
 
 /* --- Mapa de inundación --- */
@@ -825,6 +1247,11 @@ body {
 
 .capas-panel-resumen {
   cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   padding: 0.6rem 0.75rem;
   font-weight: 600;
   font-size: 0.9rem;
@@ -869,31 +1296,99 @@ body {
 
 .capas-slider {
   width: 100%;
-  height: 40px;
+  height: 44px;
   touch-action: pan-y;
 }
 
 /*
- * Spec 007 M2: los chips envuelven en vez de desbordar con scroll horizontal
- * (antes se veían cortados, p. ej. "4,44 costanera jul 202", sin ninguna
- * pista visual de que había más texto).
+ * Spec 008 M3: scroll horizontal (no wrap) con un degradé a la derecha como
+ * indicador visual de que hay más chips, en vez de que el último quede
+ * cortado por el borde de la tarjeta (diagnóstico previo, ítem 4). Cada chip
+ * tiene `scroll-snap-align` para que el scroll "enganche" en cada uno.
  */
 .capas-escenarios {
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.4rem;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  padding-bottom: 0.15rem;
 }
+
+.capas-escenarios::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0.15rem;
+  width: 28px;
+  pointer-events: none;
+  background: linear-gradient(to right, transparent, var(--card-bg));
+}
+
+/*
+ * Flecha sobre el degradé (menor, revisión de diseño): el degradé solo
+ * ("::after" de arriba) se funde con el propio fondo `--card-bg` de los
+ * chips que queden debajo y termina siendo invisible ahí — el indicador
+ * "hay más para el lado" no se notaba. `map.ts` agrega/saca esta clase según
+ * el scroll (`capas-escenarios--fin` cuando ya no hay más para la derecha).
+ */
+.capas-escenarios::before {
+  content: "›";
+  position: absolute;
+  top: 0;
+  bottom: 0.15rem;
+  right: 4px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.capas-escenarios--fin::before,
+.capas-escenarios--fin::after {
+  display: none;
+}
+
+/*
+ * En el panel lateral los escenarios envuelven en varias filas en vez de
+ * scrollear: el panel es angosto (~300-400 px) y abajo sobra alto, así que
+ * un scroll horizontal escondía la mitad de los escenarios detrás de un
+ * gesto que nadie hace. En mobile el panel es ancho y bajo, y ahí el scroll
+ * horizontal sigue siendo lo correcto (M3).
+ */
+@media (min-width: 1280px) {
+  .capas-escenarios {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+
+  .capas-escenarios::after,
+  .capas-escenarios::before {
+    content: none;
+  }
+}
+
 
 .capas-escenario {
   flex: 0 0 auto;
-  min-height: 40px;
+  scroll-snap-align: start;
+  /* M1: blanco de toque >= 44 px; ancho mínimo para que un texto corto
+     ("Hoy") no quede tan angosto como alto y se lea como un punto en vez de
+     una píldora (menor, revisión de diseño). */
+  min-height: 44px;
+  min-width: 3.5rem;
   padding: 0.4rem 0.65rem;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: var(--card-bg);
   color: var(--fg);
   font-size: 0.8rem;
-  white-space: normal;
+  white-space: nowrap;
   text-align: center;
 }
 

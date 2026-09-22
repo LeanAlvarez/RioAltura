@@ -5,6 +5,8 @@ import { getPronostico, getPronosticoHistorico } from "../api/pronostico";
 import type { AlturaDiaria, DiaPronostico, HistoricoDia } from "../api/types";
 import { ALERTA_M, EVACUACION_EN_SECO_M, EVACUACION_M } from "../domain/dominio";
 import { formatDiaSemanaFecha, formatMetros, formatRangoMetros, parseFechaLocal } from "../format";
+import { PALETA, TRAZOS, fondoTrazoCss, leerVariableCss, propsTrazoUplot, type RolLinea } from "../graficos/paleta";
+import { onTemaCambia } from "../theme";
 
 export type RangoDias = 30 | 90 | 365;
 export const RANGOS: readonly RangoDias[] = [30, 90, 365];
@@ -100,41 +102,29 @@ interface EstadoGrafico {
 }
 
 /**
- * `dash` distingue cada umbral aunque los colores se vean parecidos (nunca
- * depende solo del color, CLAUDE.md §7). "Evacuación" usa `--danger-etiqueta`
- * en vez de `--danger`: al lado de "Alerta" (`--error`) los dos rojos
- * originales eran casi idénticos (ítem 6, correcciones de diseño).
+ * Cada umbral tiene su propio rol de paleta (`graficos/paleta.ts`), con un
+ * patrón de guiones distinto de los otros dos y del resto de las líneas del
+ * gráfico: nunca depende solo del color (CLAUDE.md §7).
  */
-const THRESHOLD_DEFS: ReadonlyArray<{
-  valor: number;
-  label: string;
-  variable: string;
-  fallback: string;
-  dash: number[];
-}> = [
-  { valor: EVACUACION_EN_SECO_M, label: "Evacuación preventiva", variable: "--warn", fallback: "#a35d00", dash: [4, 4] },
-  { valor: ALERTA_M, label: "Alerta", variable: "--error", fallback: "#b3261e", dash: [7, 3] },
-  {
-    valor: EVACUACION_M,
-    label: "Evacuación",
-    variable: "--danger-etiqueta",
-    fallback: "#8a1a63",
-    dash: [2, 3],
-  },
+const THRESHOLD_DEFS: ReadonlyArray<{ valor: number; label: string; rol: RolLinea; variable: string }> = [
+  { valor: EVACUACION_EN_SECO_M, label: "Evacuación preventiva", rol: "evacuacionPreventiva", variable: "--graf-evac-preventiva" },
+  { valor: ALERTA_M, label: "Alerta", rol: "alerta", variable: "--graf-alerta" },
+  { valor: EVACUACION_M, label: "Evacuación", rol: "evacuacion", variable: "--graf-evacuacion" },
 ];
 
-/** Lee un color desde una custom property CSS, para que el gráfico se adapte a modo claro/oscuro. */
-function leerColor(variable: string, fallback: string, referencia: HTMLElement): string {
-  const valor = getComputedStyle(referencia).getPropertyValue(variable).trim();
-  return valor || fallback;
-}
-
+/** Lee la paleta de gráficos vigente desde las custom properties CSS (spec 008 v3: reactivo al tema, se relee en cada render). */
 function construirColores(referencia: HTMLElement) {
   return {
-    real: leerColor("--fg", "#1c2430", referencia),
-    pronostico: leerColor("--accent", "#1b6ea8", referencia),
-    historico: leerColor("--muted", "#7a4fa3", referencia),
-    thresholds: THRESHOLD_DEFS.map((t) => ({ ...t, color: leerColor(t.variable, t.fallback, referencia) })),
+    real: leerVariableCss("--graf-altura-real", PALETA.light.alturaReal, referencia),
+    pronostico: leerVariableCss("--graf-pronostico", PALETA.light.pronostico, referencia),
+    pronosticoBanda: leerVariableCss("--graf-pronostico-banda", PALETA.light.pronosticoBanda, referencia),
+    historico: leerVariableCss("--graf-historico", PALETA.light.historico, referencia),
+    eje: leerVariableCss("--graf-eje", PALETA.light.ejeTexto, referencia),
+    grilla: leerVariableCss("--graf-grilla", PALETA.light.grilla, referencia),
+    thresholds: THRESHOLD_DEFS.map((t) => ({
+      ...t,
+      color: leerVariableCss(t.variable, PALETA.light[t.rol], referencia),
+    })),
   };
 }
 
@@ -164,7 +154,11 @@ function crearEtiquetasUmbrales(
     const el = document.createElement("div");
     el.className = "grafico-umbral-etiqueta";
     el.style.color = t.color;
-    el.textContent = `${t.label} (${metrosEjeFormatter.format(t.valor)} m)`;
+    // El número va primero (menor, revisión de diseño a 360 px): con el
+    // nombre adelante, el `text-overflow: ellipsis` de `.grafico-umbral-etiqueta`
+    // cortaba justo el número al final ("Evacuación preventiva (6,…"), que es
+    // el dato. Así, si algo se corta, se corta el nombre, nunca la altura.
+    el.textContent = `${metrosEjeFormatter.format(t.valor)} m — ${t.label}`;
     wrapEl.appendChild(el);
     return { el, valor: t.valor };
   });
@@ -208,24 +202,29 @@ function construirOpciones(
 ): uPlot.Options {
   const uPlotSeries: uPlot.Series[] = [
     {},
-    { label: "Altura real", stroke: colores.real, width: 2, points: { show: false } },
+    { label: "Altura real", stroke: colores.real, width: TRAZOS.alturaReal.widthPx, points: { show: false } },
     { label: "Pronóstico (mín.)", stroke: "transparent", width: 0, points: { show: false } },
     {
       label: "Pronóstico (máx.)",
       stroke: colores.pronostico,
-      fill: `color-mix(in srgb, ${colores.pronostico} 15%, transparent)`,
+      fill: colores.pronosticoBanda,
       width: 0,
       points: { show: false },
     },
-    { label: "Pronóstico (centro)", stroke: colores.pronostico, width: 2, dash: [6, 4], points: { show: false } },
+    {
+      label: "Pronóstico (centro)",
+      stroke: colores.pronostico,
+      points: { show: false },
+      ...propsTrazoUplot(TRAZOS.pronostico),
+    },
   ];
 
   if (mostrarHistorico) {
     uPlotSeries.push({
       label: "Pronóstico a 3 días (histórico)",
       stroke: colores.historico,
-      width: 1,
       points: { show: false },
+      ...propsTrazoUplot(TRAZOS.historico),
     });
   }
 
@@ -233,25 +232,43 @@ function construirOpciones(
     uPlotSeries.push({
       label: t.label,
       stroke: t.color,
-      width: 1,
-      dash: t.dash,
       points: { show: false },
+      ...propsTrazoUplot(TRAZOS[t.rol]),
     });
   }
 
   return {
     width,
     height: 280,
-    padding: [12, 12, 0, 0],
+    // Right padding = 28 (no 12): a 1920 px, el último rótulo del eje X
+    // (p.ej. "26 sep") quedaba cortado por el borde del lienzo (menor,
+    // revisión de diseño) porque uPlot centra la etiqueta sobre su marca y
+    // no reservaba lugar para la mitad que sobresale del último tick.
+    padding: [12, 28, 0, 0],
     scales: { x: { time: true } },
     series: uPlotSeries,
     bands: [{ series: [2, 3] }],
+    // L4 (spec 008) + paleta v3: ejes >= 13 px, con el rol dedicado
+    // `--graf-eje` (contraste AA en los dos temas, ver paleta.test.ts) y
+    // grilla en `--graf-grilla`. M4: a 360 px, menos marcas en el eje X (más
+    // espacio mínimo entre ticks) para que no se amontonen.
     axes: [
       {
+        font: "13px system-ui, sans-serif",
+        stroke: colores.eje,
+        grid: { stroke: colores.grilla, width: 1 },
+        ticks: { stroke: colores.grilla, width: 1 },
+        size: 40,
+        space: width < 400 ? 70 : 50,
         values: (_u, splits) => splits.map((s) => fechaEjeFormatter.format(new Date(s * 1000))),
       },
       {
         label: "Altura (metros)",
+        font: "13px system-ui, sans-serif",
+        labelFont: "13px system-ui, sans-serif",
+        stroke: colores.eje,
+        grid: { stroke: colores.grilla, width: 1 },
+        ticks: { stroke: colores.grilla, width: 1 },
         values: (_u, splits) => splits.map((s) => metrosEjeFormatter.format(s)),
       },
     ],
@@ -279,21 +296,33 @@ function construirDatos(series: ChartSeries, mostrarHistorico: boolean): uPlot.A
 
 interface LeyendaItem {
   label: string;
-  color: string;
-  dash: boolean;
+  /** Fondo CSS ya resuelto (sólido o `repeating-linear-gradient`, ver `fondoTrazoCss`): la muestra siempre coincide con la línea. */
+  fondo: string;
+  widthPx: number;
 }
 
 /** Leyenda propia (reemplaza la de uPlot, que solo muestra "--" hasta pasar el cursor). */
 function construirItemsLeyenda(colores: ReturnType<typeof construirColores>, mostrarHistorico: boolean): LeyendaItem[] {
   const items: LeyendaItem[] = [
-    { label: "Altura real", color: colores.real, dash: false },
-    { label: "Entre lo mínimo y lo máximo", color: colores.pronostico, dash: false },
-    { label: "Lo más probable", color: colores.pronostico, dash: true },
+    { label: "Altura real", fondo: colores.real, widthPx: TRAZOS.alturaReal.widthPx },
+    { label: "Entre lo mínimo y lo máximo", fondo: colores.pronosticoBanda, widthPx: TRAZOS.alturaReal.widthPx },
+    {
+      label: "Lo más probable",
+      fondo: fondoTrazoCss(colores.pronostico, TRAZOS.pronostico),
+      widthPx: TRAZOS.pronostico.widthPx,
+    },
   ];
   if (mostrarHistorico) {
-    items.push({ label: "Pronóstico a 3 días (histórico)", color: colores.historico, dash: true });
+    items.push({
+      label: "Pronóstico a 3 días (histórico)",
+      fondo: fondoTrazoCss(colores.historico, TRAZOS.historico),
+      widthPx: TRAZOS.historico.widthPx,
+    });
   }
-  for (const t of colores.thresholds) items.push({ label: t.label, color: t.color, dash: true });
+  for (const t of colores.thresholds) {
+    const trazo = TRAZOS[t.rol];
+    items.push({ label: t.label, fondo: fondoTrazoCss(t.color, trazo), widthPx: trazo.widthPx });
+  }
   return items;
 }
 
@@ -302,7 +331,7 @@ function renderLeyenda(container: HTMLElement, items: LeyendaItem[]): void {
     .map(
       (item) => `
         <li>
-          <span class="grafico-leyenda-linea${item.dash ? " grafico-leyenda-linea--punteada" : ""}" style="--color-linea:${item.color}"></span>
+          <span class="grafico-leyenda-linea" style="background:${item.fondo};height:${item.widthPx}px"></span>
           ${item.label}
         </li>
       `,
@@ -329,13 +358,18 @@ function contenidoTooltip(series: ChartSeries, idx: number): string | null {
   return `<strong>${fecha}</strong><br>${partes.join("<br>")}`;
 }
 
+export interface MontajeGrafico {
+  /** Desuscribe del cambio de tema y destruye la instancia de uPlot. Evita memory leaks al desmontar la tarjeta. */
+  destroy(): void;
+}
+
 /**
  * Owns the range selector / historical toggle, fetches data (independently
  * of the other cards) and (re)draws the uPlot chart. Not unit-tested (uPlot
  * needs a real canvas); `buildChartSeries`/`buildResumenTexto` above carry
  * the tested logic.
  */
-export function mountGrafico(container: HTMLElement, deps: GraficoDeps = defaultDeps): void {
+export function mountGrafico(container: HTMLElement, deps: GraficoDeps = defaultDeps): MontajeGrafico {
   const estado: EstadoGrafico = { rango: 90, mostrarHistorico: false };
   let instancia: uPlot | null = null;
   let ultimaSeries: ChartSeries | null = null;
@@ -371,7 +405,9 @@ export function mountGrafico(container: HTMLElement, deps: GraficoDeps = default
   const estadoEl = container.querySelector<HTMLParagraphElement>(".grafico-estado");
   const resumenEl = container.querySelector<HTMLParagraphElement>(".grafico-resumen");
   const toggleEl = container.querySelector<HTMLInputElement>("#toggle-historico");
-  if (!canvasEl || !canvasWrapEl || !tooltipEl || !leyendaEl || !estadoEl || !resumenEl || !toggleEl) return;
+  if (!canvasEl || !canvasWrapEl || !tooltipEl || !leyendaEl || !estadoEl || !resumenEl || !toggleEl) {
+    return { destroy(): void {} };
+  }
 
   function mostrarTooltip(idx: number, left: number, top: number): void {
     if (!ultimaSeries || !tooltipEl || !canvasWrapEl) return;
@@ -404,36 +440,14 @@ export function mountGrafico(container: HTMLElement, deps: GraficoDeps = default
     return { x: overRect.left - wrapRect.left, y: overRect.top - wrapRect.top };
   }
 
-  async function actualizar(): Promise<void> {
-    if (!estadoEl || !canvasEl || !canvasWrapEl || !resumenEl || !leyendaEl) return;
-    estadoEl.textContent = "Cargando…";
-    ocultarTooltip();
-
-    const ahora = new Date();
-    const { desde, hasta } = calcularRangoFechas(estado.rango, ahora);
-
-    const [alturasResult, pronosticoResult, historicoResult] = await Promise.all([
-      deps.getAlturasDiarias(desde, hasta),
-      deps.getPronostico(),
-      estado.mostrarHistorico ? deps.getPronosticoHistorico(3, desde) : Promise.resolve(null),
-    ]);
-
-    if (alturasResult.kind !== "ok") {
-      estadoEl.textContent = "No pudimos cargar la serie de altura real.";
-      canvasEl.replaceChildren();
-      instancia?.destroy();
-      instancia = null;
-      return;
-    }
-
-    const dias = pronosticoResult.kind === "ok" ? pronosticoResult.data.dias : null;
-    const historico = historicoResult && historicoResult.kind === "ok" ? historicoResult.data : null;
-
-    const series = buildChartSeries(alturasResult.data, dias, historico);
-    ultimaSeries = series;
-    estadoEl.textContent =
-      pronosticoResult.kind === "ok" ? "" : "El pronóstico no está disponible; se muestra solo la altura real.";
-    resumenEl.textContent = buildResumenTexto(alturasResult.data, dias);
+  /**
+   * (Re)dibuja el gráfico a partir de `series` ya calculada, releyendo la
+   * paleta de colores en cada llamada (spec 008 v3: reactividad al tema).
+   * Se usa tanto después de un fetch nuevo como al cambiar de tema (sin
+   * volver a pedir los datos).
+   */
+  function dibujar(series: ChartSeries): void {
+    if (!canvasEl || !canvasWrapEl || !leyendaEl) return;
 
     const colores = construirColores(container);
     renderLeyenda(leyendaEl, construirItemsLeyenda(colores, estado.mostrarHistorico));
@@ -492,6 +506,44 @@ export function mountGrafico(container: HTMLElement, deps: GraficoDeps = default
     });
   }
 
+  async function actualizar(): Promise<void> {
+    if (!estadoEl || !canvasEl || !canvasWrapEl || !resumenEl || !leyendaEl) return;
+    estadoEl.textContent = "Cargando…";
+    ocultarTooltip();
+
+    const ahora = new Date();
+    const { desde, hasta } = calcularRangoFechas(estado.rango, ahora);
+
+    const [alturasResult, pronosticoResult, historicoResult] = await Promise.all([
+      deps.getAlturasDiarias(desde, hasta),
+      deps.getPronostico(),
+      estado.mostrarHistorico ? deps.getPronosticoHistorico(3, desde) : Promise.resolve(null),
+    ]);
+
+    if (alturasResult.kind !== "ok") {
+      estadoEl.textContent = "No pudimos cargar la serie de altura real.";
+      canvasEl.replaceChildren();
+      instancia?.destroy();
+      instancia = null;
+      return;
+    }
+
+    const dias = pronosticoResult.kind === "ok" ? pronosticoResult.data.dias : null;
+    const historico = historicoResult && historicoResult.kind === "ok" ? historicoResult.data : null;
+
+    const series = buildChartSeries(alturasResult.data, dias, historico);
+    ultimaSeries = series;
+    estadoEl.textContent =
+      pronosticoResult.kind === "ok" ? "" : "El pronóstico no está disponible; se muestra solo la altura real.";
+    resumenEl.textContent = buildResumenTexto(alturasResult.data, dias);
+
+    dibujar(series);
+  }
+
+  const desuscribirTema = onTemaCambia(() => {
+    if (ultimaSeries) dibujar(ultimaSeries);
+  });
+
   container.querySelectorAll<HTMLButtonElement>("[data-rango]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const rango = Number(btn.dataset.rango) as RangoDias;
@@ -508,11 +560,21 @@ export function mountGrafico(container: HTMLElement, deps: GraficoDeps = default
     void actualizar();
   });
 
-  window.addEventListener("resize", () => {
+  function manejarResize(): void {
     if (!instancia || !canvasEl || !canvasWrapEl) return;
     instancia.setSize({ width: Math.max(280, canvasEl.clientWidth), height: 280 });
     posicionarEtiquetasUmbrales(instancia, canvasWrapEl, umbralesActuales);
-  });
+  }
+  window.addEventListener("resize", manejarResize);
 
   void actualizar();
+
+  return {
+    destroy(): void {
+      desuscribirTema();
+      window.removeEventListener("resize", manejarResize);
+      instancia?.destroy();
+      instancia = null;
+    },
+  };
 }
