@@ -1,4 +1,4 @@
-"""Hourly job: fetch the real port gauge level from INA, fall back to Prefectura."""
+"""Hourly job: port gauge level from INA, falling back to Prefectura and then CARU."""
 
 import logging
 from datetime import UTC, datetime, timedelta
@@ -8,7 +8,7 @@ from app.repositories.alturas import upsert_alturas
 from app.repositories.db import get_engine
 from sqlalchemy import Engine
 
-from jobs import ina, prefectura
+from jobs import caru, ina, prefectura
 from jobs.http import FuenteError, build_client
 
 logger = logging.getLogger(__name__)
@@ -22,62 +22,68 @@ _INA_WINDOW_HORAS = 48
 _STALE_AFTER_HORAS = 24
 
 
+def _tiene_lectura_reciente(rows: list, now: datetime) -> bool:
+    return any(row.fecha_hora >= now - timedelta(hours=_STALE_AFTER_HORAS) for row in rows)
+
+
 def actualizar_alturas(engine: Engine, client: httpx.Client, now: datetime | None = None) -> dict:
     """Fetch the latest port gauge reading and upsert it.
 
-    Tries INA first (last 48h). Falls back to Prefectura (last 3 days) when
-    INA fails, or when none of the INA readings are recent enough (within
-    the last 24h) -- but any stale-but-non-empty INA data is upserted too,
-    since it is still useful history. If Prefectura also fails, logs an
-    error and returns without raising, so the scheduler keeps running.
+    Chain: INA (last 48h) -> Prefectura (last 3 days) -> CARU (spec 009).
+    Each link is used only if it actually returns a reading from the last
+    24h; otherwise the run moves on to the next one. Stale-but-non-empty
+    data is still upserted at every step, because old readings are valuable
+    history even when they cannot answer "how is the river today".
 
-    Returns a summary dict `{fuente, fetched, inserted}` (fuente is None
-    when both sources failed).
+    **Freshness is checked at every link, not only at INA.** Until spec 009
+    the fallback trusted Prefectura as soon as it responded, so on
+    2026-09-22 the job reported success with `fuente=prefectura` while every
+    row it got was as old as INA's — and a third source would never have
+    been reached.
+
+    If no source has a recent reading, logs and returns without raising, so
+    the scheduler keeps running. `fuente` is then the last source that
+    contributed rows, or None if every one failed.
     """
     now = now if now is not None else datetime.now(UTC)
 
-    ina_rows = []
-    ina_reason: str | None = None
-    try:
-        ina_rows = ina.fetch_alturas(client, now - timedelta(hours=_INA_WINDOW_HORAS), now)
-    except FuenteError as exc:
-        ina_reason = str(exc)
+    total_inserted = 0
+    ultima_fuente: str | None = None
+    total_fetched = 0
 
-    tiene_lectura_reciente = any(
-        row.fecha_hora >= now - timedelta(hours=_STALE_AFTER_HORAS) for row in ina_rows
-    )
+    for nombre, traer in (
+        ("ina", lambda: ina.fetch_alturas(client, now - timedelta(hours=_INA_WINDOW_HORAS), now)),
+        ("prefectura", lambda: prefectura.fetch_alturas(client, dias=3)),
+        ("caru", lambda: caru.fetch_alturas(client)),
+    ):
+        try:
+            rows = traer()
+        except FuenteError as exc:
+            logger.warning("alturas: %s unavailable: %s", nombre, exc)
+            continue
 
-    if ina_reason is None and tiene_lectura_reciente:
-        inserted = upsert_alturas(engine, ina_rows)
-        logger.info("alturas: fetched %d, inserted %d (fuente=ina)", len(ina_rows), inserted)
-        return {"fuente": "ina", "fetched": len(ina_rows), "inserted": inserted}
+        if not rows:
+            logger.warning("alturas: %s returned no rows", nombre)
+            continue
 
-    # INA failed outright, or returned only stale readings: upsert whatever
-    # we got from INA (history is valuable) before falling back.
-    ina_inserted = 0
-    if ina_rows:
-        ina_inserted = upsert_alturas(engine, ina_rows)
+        total_fetched += len(rows)
+        total_inserted += upsert_alturas(engine, rows)
+        ultima_fuente = nombre
 
-    reason = ina_reason if ina_reason is not None else "no reading in the last 24h"
-    logger.warning("INA unavailable or stale, falling back to Prefectura: %s", reason)
+        if _tiene_lectura_reciente(rows, now):
+            logger.info(
+                "alturas: fetched %d, inserted %d (fuente=%s)", len(rows), total_inserted, nombre
+            )
+            return {"fuente": nombre, "fetched": total_fetched, "inserted": total_inserted}
 
-    try:
-        prefectura_rows = prefectura.fetch_alturas(client, dias=3)
-    except FuenteError as exc:
-        logger.error("Prefectura also failed: %s", exc)
-        return {"fuente": None, "fetched": len(ina_rows), "inserted": ina_inserted}
+        logger.warning(
+            "alturas: %s has no reading in the last %dh, trying next source",
+            nombre,
+            _STALE_AFTER_HORAS,
+        )
 
-    prefectura_inserted = upsert_alturas(engine, prefectura_rows)
-    logger.info(
-        "alturas: fetched %d, inserted %d (fuente=prefectura)",
-        len(prefectura_rows),
-        prefectura_inserted,
-    )
-    return {
-        "fuente": "prefectura",
-        "fetched": len(prefectura_rows),
-        "inserted": ina_inserted + prefectura_inserted,
-    }
+    logger.error("alturas: no source had a recent reading")
+    return {"fuente": ultima_fuente, "fetched": total_fetched, "inserted": total_inserted}
 
 
 def job_actualizar_alturas() -> None:

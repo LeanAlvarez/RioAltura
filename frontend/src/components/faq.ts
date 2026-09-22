@@ -35,7 +35,7 @@ export function buildFaqEstaticas(): FaqItem[] {
       id: "datos",
       pregunta: "¿De dónde salen los datos?",
       respuestaHtml:
-        "La altura real del puerto la mide el INA (Instituto Nacional del Agua); si el INA no responde, se usa Prefectura Naval Argentina como respaldo. El pronóstico de caudal viene de Google Flood Forecasting API. El mapa de zonas inundables se hace con el modelo de elevación satelital Copernicus DEM.",
+        "La altura real del puerto la mide el INA (Instituto Nacional del Agua). Si el INA no publica, se usa Prefectura Naval Argentina, y si tampoco hay dato ahí, CARU (la comisión del río Uruguay que comparten Argentina y Uruguay). El pronóstico de caudal viene de Google Flood Forecasting API. El mapa de zonas inundables se hace con el modelo de elevación satelital Copernicus DEM.",
     },
     {
       id: "actualizacion",

@@ -1,6 +1,6 @@
-"""Tests for the hourly alturas job's INA/Prefectura fallback orchestration.
+"""Tests for the hourly alturas job's INA/Prefectura/CARU fallback orchestration.
 
-These mock at the `ina.fetch_alturas` / `prefectura.fetch_alturas` boundary
+These mock at the `ina` / `prefectura` / `caru` `fetch_alturas` boundary
 (monkeypatched directly, no HTTP involved) rather than through
 `httpx.MockTransport`: retry/backoff behaviour is already covered by
 `test_http.py`, and going through it here would only add real sleep delays
@@ -86,7 +86,7 @@ def test_ina_falla_usa_prefectura_y_loguea_warning(
 
     assert resumen["fuente"] == "prefectura"
     assert resumen["inserted"] == 1
-    assert any("falling back to Prefectura" in r.getMessage() for r in caplog.records)
+    assert any("ina" in r.getMessage() for r in caplog.records)
 
     filas = list_alturas(engine, datetime(2020, 1, 1, tzinfo=UTC), datetime(2030, 1, 1, tzinfo=UTC))
     assert all(row.fuente == "prefectura" for row in filas)
@@ -113,7 +113,7 @@ def test_ina_solo_lecturas_viejas_se_upsertean_y_ademas_se_usa_prefectura(
         resumen = alturas.actualizar_alturas(engine, client, now=NOW)
 
     assert resumen["fuente"] == "prefectura"
-    assert any("falling back to Prefectura" in r.getMessage() for r in caplog.records)
+    assert any("ina" in r.getMessage() for r in caplog.records)
 
     filas = list_alturas(engine, datetime(2020, 1, 1, tzinfo=UTC), datetime(2030, 1, 1, tzinfo=UTC))
     fuentes = {row.fuente for row in filas}
@@ -151,3 +151,102 @@ def test_job_actualizar_alturas_nunca_lanza(monkeypatch, caplog) -> None:
         alturas.job_actualizar_alturas()  # must not raise
 
     assert any("alturas job failed" in r.getMessage() for r in caplog.records)
+
+
+# --- Tercer eslabón: CARU (spec 009) ---------------------------------------
+
+
+def _altura(fecha_hora, fuente: str, altura_m: float = 4.29) -> AlturaIn:
+    return AlturaIn(fecha_hora=fecha_hora, altura_m=altura_m, fuente=fuente)
+
+
+def _falla(nombre: str):
+    def _f(*args, **kwargs):
+        raise FuenteError(f"{nombre} caída")
+
+    return _f
+
+
+def test_las_tres_fuentes_viejas_no_inventa_una_lectura_fresca(
+    engine: Engine, client: httpx.Client, caplog, monkeypatch
+) -> None:
+    """El caso real del 2026-09-22, que motivó esta spec.
+
+    INA y Prefectura respondían, pero con lecturas de más de 24 h. Antes el
+    job daba `fuente=prefectura` y se quedaba ahí: reportaba éxito sin tener
+    un dato de hoy, y un tercer eslabón nunca se habría alcanzado.
+    """
+    vieja = NOW - timedelta(hours=33)
+    monkeypatch.setattr(alturas.ina, "fetch_alturas", lambda *a, **k: [_altura(vieja, "ina")])
+    monkeypatch.setattr(
+        alturas.prefectura, "fetch_alturas", lambda *a, **k: [_altura(vieja, "prefectura")]
+    )
+    monkeypatch.setattr(alturas.caru, "fetch_alturas", lambda *a, **k: [_altura(vieja, "caru")])
+
+    with caplog.at_level(logging.WARNING):
+        resultado = alturas.actualizar_alturas(engine, client, now=NOW)
+
+    # Ninguna fuente tenía dato fresco: se dice, no se finge.
+    assert "no source had a recent reading" in caplog.text
+    # Pero el historial viejo igual se guarda: sirve para el gráfico.
+    filas = list_alturas(engine, datetime(2020, 1, 1, tzinfo=UTC), datetime(2030, 1, 1, tzinfo=UTC))
+    assert len(filas) == 3
+    assert resultado["inserted"] == 3
+
+
+def test_ina_y_prefectura_viejas_pero_caru_fresca_usa_caru(
+    engine: Engine, client: httpx.Client, monkeypatch
+) -> None:
+    vieja = NOW - timedelta(hours=33)
+    fresca = NOW - timedelta(hours=2)
+    monkeypatch.setattr(alturas.ina, "fetch_alturas", lambda *a, **k: [_altura(vieja, "ina")])
+    monkeypatch.setattr(
+        alturas.prefectura, "fetch_alturas", lambda *a, **k: [_altura(vieja, "prefectura")]
+    )
+    monkeypatch.setattr(
+        alturas.caru, "fetch_alturas", lambda *a, **k: [_altura(fresca, "caru", 4.31)]
+    )
+
+    resultado = alturas.actualizar_alturas(engine, client, now=NOW)
+
+    assert resultado["fuente"] == "caru"
+    # El historial viejo de las dos primeras también quedó guardado.
+    filas = list_alturas(engine, datetime(2020, 1, 1, tzinfo=UTC), datetime(2030, 1, 1, tzinfo=UTC))
+    assert {row.fuente for row in filas} == {"ina", "prefectura", "caru"}
+
+
+def test_no_llega_a_caru_si_prefectura_tiene_dato_fresco(
+    engine: Engine, client: httpx.Client, monkeypatch
+) -> None:
+    """El orden importa: CARU publica cada 12 h, así que va última."""
+    monkeypatch.setattr(alturas.ina, "fetch_alturas", _falla("INA"))
+    monkeypatch.setattr(
+        alturas.prefectura,
+        "fetch_alturas",
+        lambda *a, **k: [_altura(NOW - timedelta(hours=1), "prefectura")],
+    )
+
+    def _caru_no_deberia_llamarse(*args, **kwargs):
+        raise AssertionError("no hay que pedirle a CARU si Prefectura ya tiene dato fresco")
+
+    monkeypatch.setattr(alturas.caru, "fetch_alturas", _caru_no_deberia_llamarse)
+
+    assert alturas.actualizar_alturas(engine, client, now=NOW)["fuente"] == "prefectura"
+
+
+def test_caru_caida_no_rompe_el_job(
+    engine: Engine, client: httpx.Client, caplog, monkeypatch
+) -> None:
+    monkeypatch.setattr(alturas.ina, "fetch_alturas", _falla("INA"))
+    monkeypatch.setattr(alturas.prefectura, "fetch_alturas", _falla("Prefectura"))
+    monkeypatch.setattr(alturas.caru, "fetch_alturas", _falla("CARU"))
+
+    with caplog.at_level(logging.WARNING):
+        resultado = alturas.actualizar_alturas(engine, client, now=NOW)
+
+    assert resultado["fuente"] is None
+    assert resultado["inserted"] == 0
+    assert (
+        list_alturas(engine, datetime(2020, 1, 1, tzinfo=UTC), datetime(2030, 1, 1, tzinfo=UTC))
+        == []
+    )

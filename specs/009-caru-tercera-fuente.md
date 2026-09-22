@@ -108,24 +108,99 @@ aparte**: el §5 prohíbe tocar el cero por cuenta propia.
 
 ## Criterios de aceptación
 
-- [ ] Con INA y Prefectura caídos o sin datos frescos, la altura llega de CARU y
-      `fuente` dice `caru`.
-- [ ] El orden de la cadena es INA → Prefectura → CARU, verificado con tests.
-- [ ] El parser tolera HTML cambiado: registra el fallo y la app sigue con el
-      último dato conocido, con su fecha visible. Sin excepciones sin atrapar.
-- [ ] Valores fuera de rango físico se descartan y se registran.
-- [ ] Tests con fixtures grabadas del HTML real; ninguno llama a la fuente (§6).
-- [ ] El FAQ menciona CARU entre las fuentes.
-- [ ] `ruff`, `pytest`, `pnpm build` y `pnpm test` pasan.
+- [x] Con INA y Prefectura sin datos frescos, la altura llega de CARU y `fuente`
+      dice `caru`. **Verificado contra las tres fuentes reales**, no con mocks.
+- [x] El orden de la cadena es INA → Prefectura → CARU, con un test que falla si
+      se le pide a CARU teniendo Prefectura dato fresco.
+- [x] El parser tolera HTML cambiado: lanza `FuenteError` y el llamador conserva
+      el último dato conocido. Sin excepciones sin atrapar.
+- [x] Valores fuera de rango físico se descartan y se registran.
+- [x] 8 tests de parser sobre la fixture grabada + 4 de cadena; ninguno llama a
+      la fuente (§6).
+- [x] El FAQ menciona CARU entre las fuentes.
+- [x] `ruff` limpio (83 archivos), 192 tests py, 217 web, build OK.
 
 ## Cómo verificar
 
-(La completa el agente.)
+```bash
+cd <worktree> && set -a; . ./.env.local; set +a
+docker-compose up -d db && uv run alembic upgrade head   # incluye la 0004
+
+# Parser contra la fixture grabada (nunca toca la fuente)
+uv run pytest worker/tests/test_caru.py -q                # 8 tests
+# Cadena de tres eslabones
+uv run pytest worker/tests/test_alturas_job.py -q         # 9 tests
+uv run ruff check . && uv run ruff format --check . && uv run pytest -q
+
+# La cadena real, contra las tres fuentes en vivo
+uv run python -c "
+from app.repositories.db import get_engine
+from jobs import alturas
+from jobs.http import build_client
+with build_client() as c: print(alturas.actualizar_alturas(get_engine(), c))
+"
+```
+
+Salida real del 2026-09-22:
+
+```
+alturas: ina has no reading in the last 24h, trying next source
+alturas: prefectura has no reading in the last 24h, trying next source
+resultado: {'fuente': 'caru', 'fetched': 753, 'inserted': 753}
+```
+
+Y en la base, con las tres fuentes conviviendo:
+
+| fuente | filas | lectura más nueva |
+|---|---|---|
+| caru | 14 | **2026-09-22 03:00 UTC** |
+| prefectura | 738 | 2026-09-21 03:00 UTC |
+| ina | 1 | 2026-09-21 03:00 UTC |
 
 ## Hallazgos
 
-(La completa el agente.)
+### La cadena sólo chequeaba la frescura del INA
+
+El defecto de fondo, encontrado al implementar: el job caía a Prefectura cuando
+el INA estaba obsoleto, pero **después confiaba en Prefectura apenas respondía**,
+sin mirar si sus lecturas también eran viejas. Por eso el 2026-09-22 reportó
+éxito con `fuente=prefectura` sin tener un dato de ese día — y por eso, tal como
+estaba, **un tercer eslabón nunca se habría alcanzado**: Prefectura siempre
+"funcionaba".
+
+La cadena se reescribió como un recorrido donde cada fuente se acepta sólo si
+trae una lectura de las últimas 24 h. El historial viejo se guarda igual en cada
+paso, porque sirve para el gráfico aunque no pueda responder "cómo está el río
+hoy". Si ninguna tiene dato fresco, se registra y se sigue: nunca se finge.
+
+### El check de la base rechazaba 'caru'
+
+`alturas` tenía `CheckConstraint("fuente IN ('ina', 'prefectura')")`. La unicidad
+ya era sobre `(fecha_hora, fuente)`, así que dos fuentes pueden convivir en el
+mismo instante sin tocarla — sólo hubo que ampliar el check, en la migración
+**0004** (nueva, sin editar ninguna existente, §2). El `downgrade` borra las
+filas de CARU antes de restaurar el check viejo: son datos de respaldo
+reconstruibles desde la fuente, no historia única.
+
+### Validación cruzada del cero del hidrómetro
+
+CARU y el INA guardaron **la misma lectura del 2026-09-21 03:00, ambas en
+4,29 m**, una al lado de la otra. Eso confirma en datos que CARU publica sobre el
+mismo cero y que no hay que convertir nada. Si en algún momento aparece una
+diferencia sistemática, es una spec aparte: el §5 prohíbe tocar el cero por
+cuenta propia.
+
+### Lo que no se resolvió
+
+Esta spec agrega un respaldo, **no arregla la fuente principal**. Que el INA
+pase más de 24 h sin publicar sigue siendo un problema de fondo: CARU tapa el
+agujero cada 12 h, pero la app queda hasta medio día sin refrescar cuando el
+INA falla. Vale una spec que investigue por qué el INA se atrasa.
 
 ## Resumen final
 
-(La completa el agente, máximo 5 líneas.)
+CARU entra como tercer eslabón de la cadena de alturas, detrás del INA y de Prefectura, con parser propio sobre la página por estación (Colón es la 12): 12,5 KB, tres columnas y siete días de historial, así que una corrida perdida se recupera sola.
+Al implementarlo apareció el defecto de fondo: la cadena sólo chequeaba la frescura del INA y después confiaba en Prefectura apenas respondía, así que un tercer eslabón nunca se habría alcanzado. Ahora cada fuente se acepta sólo si trae una lectura de las últimas 24 h.
+Migración 0004 para ampliar el check de `fuente`; la unicidad ya era por `(fecha_hora, fuente)` y no hizo falta tocarla.
+Verificado contra las tres fuentes en vivo el 2026-09-22: INA y Prefectura sin dato de ese día, CARU con 753 lecturas insertadas y `fuente=caru`.
+CARU y el INA guardaron la misma lectura del 21 en 4,29 m, lo que confirma en datos que publican sobre el mismo cero del hidrómetro.

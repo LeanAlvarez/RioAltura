@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>CARU</title>
+                        <link rel="stylesheet" href="/alturas/web/css/6c9d831.css">
+            </head>
+<body>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-lg-7 col-md-10 col-sm-12 col-xs-12 col-lg-offset-1">
+            <div class="header-wrapper">
+            <h1 class="page-header">Registro de alturas del río Uruguay</h1>
+            </div>
+        </div>
+        <div class="col-lg-2 col-md-2 col-sm-12 hidden-sm hidden-xs fondo-blanco">
+                        <img class="caru-logo img-responsive" src="/alturas/web/images/1c022d7.jpg" />
+                    </div>
+    </div>
+    <div class="row">
+        <div class="col-lg-9 col-md-12 col-sm-12 col-sxs-12 col-lg-offset-1 fondo-blanco no-padding-left">
+            <nav class="nav navbar-default fondo-blanco">
+                <div class="container-fluid border-inferior-gris custom-container">
+                    <div class="navbar-header">
+                        <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-collapsible" aria-expanded="false">
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                            <span class="icon-bar"></span>
+                        </button>
+                        <a class="navbar-brand texto-negro" href="http://caru.org.uy">CARU</a>
+                    </div>
+                    <div class="collapse navbar-collapse" id="navbar-collapsible">
+                        <ul class="nav navbar-nav">
+                            <li><a href="/alturas/web/user/alturas">Alturas</a></li>
+                        </ul>
+
+                    </div>
+
+
+            </nav>
+        </div>
+    </div>
+
+</div>
+
+
+<div class="container-fluid">
+
+    <div class="row">
+        <div class="col-lg-9 col-lg-offset-1  col-md-12 col-sm-12 col-xs-12 fondo-blanco">
+            <h4 class="titulo-panel-usuario">Puerto de Colón</h4>
+                        <div id="grafico"></div>
+            <div class="table-responsive">
+                <table class="table table-striped table-bordered table-condensed" id="alturas">
+                    <thead>
+                    <tr class="fondo-thead-gris"><th>Puerto</th><th>Fecha - Hora</th><th>Registro</th></tr>
+                    </thead>
+                    <tbody>
+                                            <tr><td>Colón</td>
+                            <td>22/09/2026 - 00:00</td>
+
+                            <td>                                    
+                                        4.29
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>21/09/2026 - 12:00</td>
+
+                            <td>                                    
+                                        4.29
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>21/09/2026 - 00:00</td>
+
+                            <td>                                    
+                                        4.29
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>20/09/2026 - 12:00</td>
+
+                            <td>                                    
+                                        4.29
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>20/09/2026 - 00:00</td>
+
+                            <td>                                    
+                                        4.28
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>19/09/2026 - 12:00</td>
+
+                            <td>                                    
+                                        4.18
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>19/09/2026 - 00:00</td>
+
+                            <td>                                    
+                                        4.12
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>18/09/2026 - 12:00</td>
+
+                            <td>                                    
+                                        4
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>18/09/2026 - 00:00</td>
+
+                            <td>                                    
+                                        3.88
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>17/09/2026 - 12:00</td>
+
+                            <td>                                    
+                                        3.69
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>17/09/2026 - 00:00</td>
+
+                            <td>                                    
+                                        3.63
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>16/09/2026 - 12:00</td>
+
+                            <td>                                    
+                                        3.52
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>16/09/2026 - 00:00</td>
+
+                            <td>                                    
+                                        3.52
+                                    
+                                                            </td></tr>
+                                            <tr><td>Colón</td>
+                            <td>15/09/2026 - 12:00</td>
+
+                            <td>                                    
+                                        3.48
+                                    
+                                                            </td></tr>
+                                        </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+
+    </div>
+    <div class="row">
+        <div class="col-lg-9 col-lg-offset-1  col-md-12 col-sm-12 col-xs-12 fondo-blanco">
+                        <form name="form" method="post" class="form-inline">
+            <div class="form-group">
+                <label class="required">Intervalo</label>
+                <div class="inline-div" id="form_intervalo" class="form-inline">                                                                                <label class="radio-inline required"><input type="radio" id="form_intervalo_0" name="form[intervalo]" required="required" value="0" checked="checked" />1 semana</label>
+    <span 2></span>                                                                                <label class="radio-inline required"><input type="radio" id="form_intervalo_1" name="form[intervalo]" required="required" value="1" />1 mes</label>
+    <span 2></span>                                                                                <label class="radio-inline required"><input type="radio" id="form_intervalo_2" name="form[intervalo]" required="required" value="2" />6 meses</label>
+    <span 2></span>                                                                                <label class="radio-inline required"><input type="radio" id="form_intervalo_3" name="form[intervalo]" required="required" value="3" />1 año</label>
+    <span 2></span></div>
+
+            </div>
+
+            <div class="form-group escala-select">
+                <label for="form_escala">Ceros</label>
+                <select id="form_escala" name="form[escala]" class="form-control"><option value="">Local</option><option value="3">Wharton</option><option value="4">Oficial ROU</option><option value="5">MOP</option></select>
+
+            </div>
+
+            <div class="form-group">
+
+                <button type="submit" id="form_filtrar" name="form[filtrar]" class="form-control">Filtrar</button>
+
+            </div>
+            <input type="hidden" id="form__token" name="form[_token]" value="hQnAH34yT4sDgCfs6GJv1SLn_JqbHySdCOSik4vU-4Y" /></form>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-9 col-lg-offset-1  col-md-12 col-sm-12 col-xs-12 footer">
+                        <img class="center-block img-responsive" src="/alturas/web/images/642ee0e.png" />
+            
+        </div>
+    </div>
+</div>
+    <script type="text/javascript">var alturasJson = [
+    {
+        "altura": 4.29,
+        "fecha": "22\/09\/2026 00:00",
+        "estado": 2
+    },
+    {
+        "altura": 4.29,
+        "fecha": "21\/09\/2026 12:00",
+        "estado": 2
+    },
+    {
+        "altura": 4.29,
+        "fecha": "21\/09\/2026 00:00",
+        "estado": 2
+    },
+    {
+        "altura": 4.29,
+        "fecha": "20\/09\/2026 12:00",
+        "estado": 2
+    },
+    {
+        "altura": 4.28,
+        "fecha": "20\/09\/2026 00:00",
+        "estado": 2
+    },
+    {
+        "altura": 4.18,
+        "fecha": "19\/09\/2026 12:00",
+        "estado": 2
+    },
+    {
+        "altura": 4.12,
+        "fecha": "19\/09\/2026 00:00",
+        "estado": 2
+    },
+    {
+        "altura": 4,
+        "fecha": "18\/09\/2026 12:00",
+        "estado": 2
+    },
+    {
+        "altura": 3.88,
+        "fecha": "18\/09\/2026 00:00",
+        "estado": 2
+    },
+    {
+        "altura": 3.69,
+        "fecha": "17\/09\/2026 12:00",
+        "estado": 2
+    },
+    {
+        "altura": 3.63,
+        "fecha": "17\/09\/2026 00:00",
+        "estado": 2
+    },
+    {
+        "altura": 3.52,
+        "fecha": "16\/09\/2026 12:00",
+        "estado": 2
+    },
+    {
+        "altura": 3.52,
+        "fecha": "16\/09\/2026 00:00",
+        "estado": 2
+    },
+    {
+        "altura": 3.48,
+        "fecha": "15\/09\/2026 12:00",
+        "estado": 2
+    }
+];</script>
+    <script type="text/javascript">var puerto = {
+    "id": 12,
+    "nombre": "Col\u00f3n",
+    "altura_evacuacion": 7.9,
+    "altura_alerta": 7.1
+};</script>
+            <script type="text/javascript" src="/alturas/web/js/b8ec824.js"></script>
+    
+
+        <script type="text/javascript" src="/alturas/web/js/cc439c5.js"></script>
+    
+    <script type="text/javascript">
+        $(document).ready(function () {
+            dataTable = $("#alturas").DataTable({
+                pageLength: 30,
+                lengthChange: false,
+                info: false,
+                searching: false,
+                ordering: false,
+                language: {
+                    paginate: {
+                        next: "Sig.",
+                        previous: "Ant."
+                    },
+                    emptyTable: "Sin datos para el intervalo seleccionado."
+                },
+                data: alturasJson,
+                columns: [
+                    {
+                        "data": function() {
+                            return puerto.nombre;
+                        }
+                    },
+                    { "data": "fecha" },
+                    { "data": "altura" }
+                ],
+                dom: '"<\'row\'<\'col-sm-12\'tr>>" +\n' +
+                    '"<\'row\'<\'col-sm-12\'p>>"'
+            });
+
+
+        });
+    </script>
+
+</body>
+</html>
