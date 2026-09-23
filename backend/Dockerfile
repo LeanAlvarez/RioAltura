@@ -13,6 +13,10 @@ COPY backend/ backend/
 COPY worker/ worker/
 RUN uv sync --frozen --no-dev
 
+COPY backend/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+
 ENV PATH="/srv/.venv/bin:$PATH"
 EXPOSE 8000
+# D1 (spec 016): migra antes de servir. Ver el comentario del script.
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

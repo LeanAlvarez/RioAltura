@@ -35,6 +35,19 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    # D4 (spec 016): mismo chequeo que en producción. /health mira también la
+    # base, así que "healthy" acá significa que puede responder de verdad.
+    # `start_period` generoso porque el primer arranque migra (D1).
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request,sys;
+          sys.exit(0 if b'\"db\":\"ok\"' in urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read() else 1)"
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
     restart: unless-stopped
 
   worker:
