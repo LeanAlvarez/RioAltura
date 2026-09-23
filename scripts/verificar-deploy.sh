@@ -26,6 +26,13 @@ ok()   { echo "✓ $1"; }
 malo() { echo "✗ $1"; FALLO=1; }
 chequear() { if [ "$1" = "0" ]; then ok "$2"; else malo "$2"; fi; }
 
+# `dokploy-network` es `external: true`: en el VPS la crea Dokploy, acá la
+# creamos nosotros o el compose ni arranca.
+RED_CREADA=0
+if ! docker network inspect dokploy-network >/dev/null 2>&1; then
+  docker network create dokploy-network >/dev/null 2>&1 && RED_CREADA=1
+fi
+
 cat > "$ENVFILE" <<ENV
 POSTGRES_USER=verif
 POSTGRES_PASSWORD=verif-$(date +%s)
@@ -41,6 +48,10 @@ limpiar() {
   echo "--- limpiando ---"
   compose down -v --remove-orphans >/dev/null 2>&1
   rm -f "$ENVFILE"
+  # Sólo la borramos si la creamos nosotros: en una máquina con Dokploy
+  # encima, esta red es de él.
+  [ "$RED_CREADA" = "1" ] && docker network rm dokploy-network >/dev/null 2>&1
+  return 0
 }
 trap limpiar EXIT
 
@@ -92,6 +103,24 @@ chequear $? "D3: la API NO publica ningún puerto al host"
 # pasarían por el motivo equivocado.
 curl -s -m 10 -o /dev/null "http://127.0.0.1:${PUERTO_WEB}/"
 chequear $? "control positivo: la web SÍ responde en su puerto (si no, lo de arriba no prueba nada)"
+
+# --- D7: la red por la que Traefik encuentra al servicio -----------------
+redes_web="$(docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' \
+  "$(compose ps -q web)" 2>/dev/null)"
+echo "    redes de web: ${redes_web}"
+echo "$redes_web" | rg -q 'dokploy-network'
+chequear $? "D7: web está en dokploy-network (sin esto Traefik no registra la ruta y da su propio 404)"
+echo "$redes_web" | rg -q "${PROYECTO}_default"
+chequear $? "D7: web sigue en la red interna (sin esto nginx no puede proxear /api a api:8000)"
+
+# Control positivo del anterior: que /api ande de verdad por la red interna.
+api_via_web="$(curl -s -m 10 "http://127.0.0.1:${PUERTO_WEB}/api/health" 2>/dev/null)"
+[ "$api_via_web" = '{"status":"ok","db":"ok"}' ]
+chequear $? "D7: control positivo -- /api responde a través de nginx, o sea la red interna funciona"
+
+puerto_publico="$(compose ps --format '{{.Service}} {{.Ports}}' | rg '^web ' | rg -o '0\.0\.0\.0:[0-9]+' | head -1)"
+[ -z "$puerto_publico" ]
+chequear $? "D7: el puerto de web queda atado a 127.0.0.1, no a la IP pública del VPS"
 
 # --- D2: bytes que viajan de verdad --------------------------------------
 CAPA="/capas/h_0300.geojson"

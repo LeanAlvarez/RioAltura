@@ -100,9 +100,18 @@ services:
         VITE_API_URL: ""
     environment:
       API_UPSTREAM: api:8000
-    # El ÚNICO puerto publicado. Dokploy/Traefik enruta acá el subdominio.
+    # Traefik (el proxy de Dokploy) llega al contenedor por `dokploy-network`,
+    # no por un puerto del host. El mapeo queda atado a 127.0.0.1 para poder
+    # verificar en local sin exponer HTTP sin cifrar en la IP pública del VPS.
     ports:
-      - "${WEB_PORT:-8080}:80"
+      - "127.0.0.1:${WEB_PORT:-8080}:80"
+    networks:
+      # LAS DOS. `default` es la red interna del compose: sin ella nginx no
+      # puede proxear /api a `api:8000`. `dokploy-network` es por donde
+      # Traefik descubre y alcanza el servicio; sin ella no registra ninguna
+      # ruta para el dominio y responde su propio 404.
+      - default
+      - dokploy-network
     depends_on:
       - api
     healthcheck:
@@ -112,6 +121,12 @@ services:
       retries: 5
       start_period: 15s
     restart: unless-stopped
+
+networks:
+  # La crea Dokploy en el VPS. En local la crea el script de verificación
+  # (`scripts/verificar-deploy.sh`), porque `external: true` exige que exista.
+  dokploy-network:
+    external: true
 
 volumes:
   pgdata:
