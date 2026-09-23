@@ -112,6 +112,32 @@ CRECIDA_ENERO_2019_M = 8.87
 # registrado en Colón" (spec 008, S4) son estos 10 m, no 9,06.
 CRECIDA_MAXIMA_OBSERVADA_M = 10.00
 
+# --- Reading quality (spec 020) ---
+#
+# NOT invented: both thresholds come from measuring the real stored series
+# (1346 days since 2023). §5 forbids making domain numbers up.
+#
+# Why jump size is NOT a criterion: day-over-day change has mean 0.235 m,
+# p99 0.930 m and a real maximum of 2.920 m. A +1.95 m jump is well inside
+# the historical range, so a jump filter would reject real floods.
+
+# Two sources reading the same day never disagreed by more than 0.335 m
+# across the 367 days that have 2+ sources (mean 0.051, p99 0.265). The
+# 2026-09-23 incident had INA at 6.24 m and CARU at 3.98 m: 2.26 m apart,
+# nearly seven times the historical maximum. This threshold sits at roughly
+# twice the observed maximum, so it stays clear of every real disagreement
+# in the series while catching that incident by a wide margin.
+DESACUERDO_MAX_FUENTES_M = 0.60
+
+# Retrospective spike test: how far a day sits from the average of its two
+# neighbours. What separates an error from a flood is the SHAPE, not the
+# size -- an error goes up and comes straight back, a flood keeps rising:
+#   error:  1,25 -> 3,82 -> 0,90      flood:  3,15 -> 4,68 -> 5,38
+# Measured over the series: mean 0.135, p99 0.629, p999 1.475. The three
+# unmistakable spikes sit at 2.75, 1.45 and 1.14; the real flood days stay
+# below 0.95. 1.00 m separates them.
+DESVIO_PICO_MAX_M = 1.00
+
 # --- Early-warning thresholds on the 3-day forecast discharge (m³/s) ---
 # Calibrated with only 2 events: PROVISIONAL.
 

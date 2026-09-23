@@ -92,5 +92,16 @@ def job_actualizar_alturas() -> None:
         engine = get_engine()
         with build_client() as client:
             actualizar_alturas(engine, client)
+        # Spec 020: the quality pass runs right after ingesting, so a bad
+        # reading is quarantined before anything reads it -- the forecast
+        # anchor, the "Hoy" card or a Telegram alert. Imported here and not
+        # at module level to keep the import graph one-way (jobs.calidad
+        # already imports from the app layer, not from this module).
+        from jobs.calidad import aplicar
+
+        marcados = aplicar(engine)
+        total = sum(marcados.values())
+        if total:
+            logger.warning("alturas: %s lectura(s) en cuarentena %s", total, marcados)
     except Exception:
         logger.exception("alturas job failed")
