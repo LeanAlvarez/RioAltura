@@ -12,6 +12,9 @@ import {
   type MedicionActual,
   type VistaMapa,
 } from "./capas";
+// Import de sólo tipo (spec 015): sin ciclo de import en tiempo de ejecución,
+// `domain/miCasa.ts` no importa nada de este módulo.
+import type { PuntoMapa } from "./domain/miCasa";
 
 // Colón, Entre Ríos. See specs/001-infra.md.
 export const COLON_CENTER: L.LatLngTuple = [-32.215, -58.145];
@@ -47,6 +50,9 @@ const COLOR_CLASE: Record<1 | 2 | 3, string> = {
   3: "#08519c",
 };
 
+/** Marcador de "Mi casa" (spec 015): naranja, bien distinto de las capas azules y del hidrómetro. */
+const COLOR_MI_CASA = "#e6550d";
+
 function estiloClase(clase: unknown): L.PathOptions {
   const c = clase === 2 || clase === 3 ? clase : 1;
   return {
@@ -73,6 +79,16 @@ export interface MapaInundacion {
   seleccionar(h: number): void;
   /** Se dispara con cada cambio de selección (slider, escenario o `seleccionar`), spec 007 T7. */
   onSeleccionCambia(listener: (h: number) => void): () => void;
+  /**
+   * Marca (o remarca) el punto de "Mi casa" en el mapa (spec 015). No calcula
+   * nada -- sólo dibuja; el cálculo lo dispara quien escuche `onMiCasaClick`
+   * o llame a esto directamente (p. ej. al restaurar el punto guardado).
+   */
+  marcarMiCasa(punto: PuntoMapa): void;
+  /** Saca el marcador de "Mi casa" del mapa (spec 015, C6). No toca `localStorage`. */
+  borrarMiCasa(): void;
+  /** Se dispara con el click que marca el punto, sólo en modo elección (spec 015, C1/C2/C6). */
+  onMiCasaClick(listener: (punto: PuntoMapa) => void): () => void;
   destroy(): void;
 }
 
@@ -108,6 +124,75 @@ function suscribirSeleccion(listener: (h: number) => void): () => void {
   nivelListeners.add(listener);
   if (ultimaSeleccion !== null) listener(ultimaSeleccion);
   return () => nivelListeners.delete(listener);
+}
+
+// --- "Mi casa" (spec 015): mismo patrón module-scope que la selección de
+// arriba, así `components/miCasa.ts` puede suscribirse sin depender de que
+// `createMap` ya haya corrido (spec 007 ya resolvió este mismo problema para
+// el slider/curva de hectáreas).
+
+const miCasaClickListeners = new Set<(punto: PuntoMapa) => void>();
+
+function emitirMiCasaClick(punto: PuntoMapa): void {
+  for (const listener of miCasaClickListeners) listener(punto);
+}
+
+function suscribirMiCasaClick(listener: (punto: PuntoMapa) => void): () => void {
+  miCasaClickListeners.add(listener);
+  return () => miCasaClickListeners.delete(listener);
+}
+
+// Modo elección (spec 015, C6). Antes el handler de click marcaba "Mi casa"
+// en CUALQUIER click del mapa: tocar para cerrar un popup o para mirar otra
+// zona movía la casa del vecino, sin forma de deshacerlo. Ahora el click sólo
+// marca mientras este flag está encendido, y lo enciende un botón explícito
+// de la tarjeta. El flag vive a nivel de módulo (no por instancia) por el
+// mismo motivo que la selección de altura: la tarjeta se monta antes de que
+// `createMap` haya corrido.
+const modoEleccionListeners = new Set<(activo: boolean) => void>();
+let modoEleccionActivo = false;
+
+function suscribirModoEleccion(listener: (activo: boolean) => void): () => void {
+  modoEleccionListeners.add(listener);
+  listener(modoEleccionActivo);
+  return () => modoEleccionListeners.delete(listener);
+}
+
+/** `index`/`cache` recién creados por `createMap`, para que "Mi casa" reuse la misma caché que el mapa (C2). */
+export interface CapaIndexListo {
+  index: CapaIndex;
+  cache: CapaCache;
+}
+
+let ultimoIndexListo: CapaIndexListo | null = null;
+const indexListoListeners = new Set<(ctx: CapaIndexListo) => void>();
+
+function emitirIndexListo(ctx: CapaIndexListo): void {
+  ultimoIndexListo = ctx;
+  for (const listener of indexListoListeners) listener(ctx);
+}
+
+function suscribirIndexListo(listener: (ctx: CapaIndexListo) => void): () => void {
+  indexListoListeners.add(listener);
+  if (ultimoIndexListo !== null) listener(ultimoIndexListo);
+  return () => indexListoListeners.delete(listener);
+}
+
+// Si `index.json` no carga, "Mi casa" no puede calcular NUNCA. Sin este
+// aviso la tarjeta se queda en "Buscando…" para siempre, que es peor que
+// decir que falló (CLAUDE.md §6, degradación elegante).
+let indexFallo = false;
+const indexErrorListeners = new Set<() => void>();
+
+function emitirIndexError(): void {
+  indexFallo = true;
+  for (const listener of indexErrorListeners) listener();
+}
+
+function suscribirIndexError(listener: () => void): () => void {
+  indexErrorListeners.add(listener);
+  if (indexFallo) listener();
+  return () => indexErrorListeners.delete(listener);
 }
 
 interface Panel {
@@ -315,7 +400,77 @@ export function createMap(container: HTMLElement): MapaInundacion {
   };
   avisoModelo.addTo(map);
 
+  // --- "Mi casa" (spec 015): fuera del `.then()` de `fetchCapaIndex()` a
+  // propósito. La tarjeta puede encender el modo elección apenas termina de
+  // importarse el módulo, mucho antes de que lleguen las capas; si el cartel,
+  // el cursor y el handler de click vivieran adentro del `.then()`, en 3G el
+  // vecino tocaría "Marcar mi casa", tocaría el mapa y no pasaría nada. Nada
+  // de esto necesita el índice: marcar es dibujar un círculo.
+  let miCasaMarker: L.CircleMarker | null = null;
+  // Cartel del modo elección: dentro del lienzo y sin eventos de puntero,
+  // para no comerse justo el click que está esperando.
+  const miCasaHint = L.DomUtil.create("div", "mi-casa-hint", lienzo);
+  miCasaHint.setAttribute("role", "status");
+  miCasaHint.textContent = "Tocá tu casa en el mapa";
+  miCasaHint.hidden = true;
+
+  function marcarMiCasaEnMapa(punto: PuntoMapa): void {
+    const latlng: L.LatLngTuple = [punto.lat, punto.lng];
+    if (miCasaMarker) {
+      miCasaMarker.setLatLng(latlng);
+      return;
+    }
+    miCasaMarker = L.circleMarker(latlng, {
+      radius: 9,
+      weight: 2,
+      color: "#ffffff",
+      fillColor: COLOR_MI_CASA,
+      fillOpacity: 1,
+    })
+      .addTo(map)
+      .bindTooltip("Mi casa", {
+        permanent: true,
+        direction: "top",
+        offset: [0, -9],
+        className: "mi-casa-tooltip",
+      })
+      .bindPopup("Mi casa");
+  }
+
+  function borrarMiCasaDelMapa(): void {
+    if (!miCasaMarker) return;
+    miCasaMarker.remove();
+    miCasaMarker = null;
+  }
+
+  const desuscribirModo = suscribirModoEleccion((activo) => {
+    miCasaHint.hidden = !activo;
+    lienzo.classList.toggle("eligiendo-mi-casa", activo);
+  });
+
+  map.on("click", (e: L.LeafletMouseEvent) => {
+    // C6: fuera del modo elección, un click en el mapa no marca ni mueve
+    // nada. El mapa se navega sin riesgo de perder el punto guardado.
+    if (!modoEleccionActivo) return;
+    const punto: PuntoMapa = { lat: e.latlng.lat, lng: e.latlng.lng };
+    marcarMiCasaEnMapa(punto);
+    // Apagar el modo ANTES de avisar: así la tarjeta ya salió de "eligiendo"
+    // cuando llega el cálculo y no hace falta ninguna bandera para que el
+    // resultado no le pise la pantalla a quien todavía estaba eligiendo.
+    setModoEleccionMiCasa(false);
+    emitirMiCasaClick(punto);
+  });
+
   let destroyed = false;
+  // Suscripciones y listeners globales que hay que soltar en `destroy()`.
+  const limpiezas: Array<() => void> = [desuscribirModo];
+  // Escape cancela el modo elección (C6): la salida estándar para quien lo
+  // encendió sin querer, sin tener que encontrar el botón de cancelar.
+  function cancelarConEscape(e: KeyboardEvent): void {
+    if (e.key === "Escape") setModoEleccionMiCasa(false);
+  }
+  document.addEventListener("keydown", cancelarConEscape);
+
   let pendienteActual: MedicionActual | null = null;
   let pendientePronosticado: number | null = null;
   let pendienteSeleccion: number | null = null;
@@ -326,6 +481,8 @@ export function createMap(container: HTMLElement): MapaInundacion {
     setNivelActual(medicion: MedicionActual): void;
     setNivelPronosticado(h: number): void;
     seleccionar(h: number): void;
+    marcarMiCasa(punto: PuntoMapa): void;
+    borrarMiCasa(): void;
   } = {
     setNivelActual(medicion) {
       pendienteActual = medicion;
@@ -336,6 +493,8 @@ export function createMap(container: HTMLElement): MapaInundacion {
     seleccionar(h) {
       pendienteSeleccion = h;
     },
+    marcarMiCasa: marcarMiCasaEnMapa,
+    borrarMiCasa: borrarMiCasaDelMapa,
   };
 
   void fetchCapaIndex()
@@ -344,6 +503,7 @@ export function createMap(container: HTMLElement): MapaInundacion {
 
       const estado = createEstadoMapa(index);
       const cache = createCapaCache();
+      emitirIndexListo({ index, cache });
       const resumen = crearResumenSiempreVisible(resumenWrap, index);
       const panel = crearPanel(panelWrap, index, estado);
 
@@ -395,6 +555,8 @@ export function createMap(container: HTMLElement): MapaInundacion {
         setNivelActual: estado.setNivelActual,
         setNivelPronosticado: estado.setNivelPronosticado,
         seleccionar: (h) => estado.seleccionar(h, { porUsuario: true }),
+        marcarMiCasa: marcarMiCasaEnMapa,
+        borrarMiCasa: borrarMiCasaDelMapa,
       };
       if (pendienteActual !== null) estado.setNivelActual(pendienteActual);
       if (pendientePronosticado !== null) estado.setNivelPronosticado(pendientePronosticado);
@@ -404,6 +566,11 @@ export function createMap(container: HTMLElement): MapaInundacion {
       if (destroyed) return;
       const div = L.DomUtil.create("div", "capas-error", lienzo);
       div.textContent = "Capas de inundación no disponibles";
+      // Sin capas, "Mi casa" no puede calcular nunca: que la tarjeta lo diga
+      // en vez de quedarse en "Buscando…" para siempre, y que no deje
+      // encendido un modo elección que ya no lleva a ningún lado.
+      setModoEleccionMiCasa(false);
+      emitirIndexError();
     });
 
   const instancia: MapaInundacion = {
@@ -420,8 +587,21 @@ export function createMap(container: HTMLElement): MapaInundacion {
     onSeleccionCambia(listener) {
       return suscribirSeleccion(listener);
     },
+    marcarMiCasa(punto) {
+      api.marcarMiCasa(punto);
+    },
+    borrarMiCasa() {
+      api.borrarMiCasa();
+    },
+    onMiCasaClick(listener) {
+      return suscribirMiCasaClick(listener);
+    },
     destroy() {
       destroyed = true;
+      setModoEleccionMiCasa(false);
+      document.removeEventListener("keydown", cancelarConEscape);
+      for (const limpiar of limpiezas) limpiar();
+      limpiezas.length = 0;
       if (ultimaInstancia === instancia) {
         ultimaInstancia = null;
         ultimaSeleccion = null;
@@ -452,4 +632,38 @@ export function seleccionar(h: number): void {
 
 export function onSeleccionCambia(listener: (h: number) => void): () => void {
   return suscribirSeleccion(listener);
+}
+
+/** Module-level API used by spec 015's `components/miCasa.ts` (it only sees the module). */
+export function marcarMiCasa(punto: PuntoMapa): void {
+  ultimaInstancia?.marcarMiCasa(punto);
+}
+
+export function onMiCasaClick(listener: (punto: PuntoMapa) => void): () => void {
+  return suscribirMiCasaClick(listener);
+}
+
+export function borrarMiCasa(): void {
+  ultimaInstancia?.borrarMiCasa();
+}
+
+/** Avisa que `index.json` no cargó: "Mi casa" no va a poder calcular nunca (spec 015, C6). */
+export function onCapaIndexError(listener: () => void): () => void {
+  return suscribirIndexError(listener);
+}
+
+/** Enciende o apaga el modo elección (spec 015, C6). Lo llama el botón de la tarjeta. */
+export function setModoEleccionMiCasa(activo: boolean): void {
+  if (modoEleccionActivo === activo) return;
+  modoEleccionActivo = activo;
+  for (const listener of modoEleccionListeners) listener(activo);
+}
+
+export function onModoEleccionMiCasaCambia(listener: (activo: boolean) => void): () => void {
+  return suscribirModoEleccion(listener);
+}
+
+/** Se dispara (con replay del último valor) en cuanto `index.json` y la `CapaCache` del mapa están listos. */
+export function onCapaIndexListo(listener: (ctx: CapaIndexListo) => void): () => void {
+  return suscribirIndexListo(listener);
 }

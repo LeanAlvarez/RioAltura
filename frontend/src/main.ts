@@ -19,6 +19,7 @@ import { mountHistorial } from "./components/historial";
 import { mountPrecision } from "./components/precision";
 import { mountDetalleTecnico } from "./components/detalleTecnico";
 import { mountAvisosTelegram } from "./components/avisosTelegram";
+import { mountMiCasa } from "./components/miCasa";
 import { mountFaq } from "./components/faq";
 import { renderPie } from "./components/pie";
 import { mountThemeToggle } from "./theme";
@@ -71,6 +72,7 @@ app.innerHTML = `
       fallback), así que un disclaimer adentro se perdería si el mapa no carga.
     -->
     <p class="disclaimer-corta disclaimer-corta--mapa">Orientativo. No reemplaza a Prefectura ni a Defensa Civil.</p>
+    <section id="tarjeta-mi-casa" class="card" aria-live="polite"></section>
     <section id="tarjeta-superficie" class="card"></section>
     <section id="tarjeta-aguas-arriba" class="card" aria-live="polite"></section>
     <section id="tarjeta-contexto" class="card" aria-live="polite"></section>
@@ -91,6 +93,7 @@ const queHacerEl = document.querySelector<HTMLElement>("#tarjeta-que-hacer");
 const umbralesEl = document.querySelector<HTMLElement>("#tarjeta-umbrales");
 const graficoEl = document.querySelector<HTMLElement>("#tarjeta-grafico");
 const mapaEl = document.querySelector<HTMLElement>("#tarjeta-mapa");
+const miCasaEl = document.querySelector<HTMLElement>("#tarjeta-mi-casa");
 const superficieEl = document.querySelector<HTMLElement>("#tarjeta-superficie");
 const aguasArribaEl = document.querySelector<HTMLElement>("#tarjeta-aguas-arriba");
 const contextoEl = document.querySelector<HTMLElement>("#tarjeta-contexto");
@@ -110,6 +113,7 @@ if (
   !umbralesEl ||
   !graficoEl ||
   !mapaEl ||
+  !miCasaEl ||
   !superficieEl ||
   !aguasArribaEl ||
   !contextoEl ||
@@ -145,6 +149,7 @@ mountSaltoGrande(saltoGrandeEl);
 mountHistorial(historialEl);
 mountPrecision(precisionEl);
 mountAvisosTelegram(telegramEl);
+mountMiCasa(miCasaEl, telegramEl);
 mountFaq(faqEl);
 mountDetalleTecnico(detalleEl, { getPronostico, getPronosticoAguasArriba });
 

@@ -56,6 +56,18 @@ export function renderAvisosTelegram(container: HTMLElement): void {
   `;
 }
 
+/**
+ * Precarga el input de umbral con una altura ya calculada (spec 015, C4: "Mi
+ * casa" enganchado a este formulario). No dispara el submit ni abre
+ * Telegram: sólo deja el número listo para que el vecino confirme con un
+ * toque. `String(umbralM)` (no `formatMetros`/`formatAltura`, que usan coma):
+ * `<input type="number">` sólo acepta el punto decimal como separador.
+ */
+export function precargarUmbral(container: HTMLElement, umbralM: number): void {
+  const input = container.querySelector<HTMLInputElement>("#telegram-umbral-input");
+  if (input) input.value = String(umbralM);
+}
+
 export function mountAvisosTelegram(container: HTMLElement): void {
   renderAvisosTelegram(container);
 
