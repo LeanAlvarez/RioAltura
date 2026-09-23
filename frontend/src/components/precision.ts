@@ -7,6 +7,7 @@ import type { AlturaDiaria, ErrorPronostico, HistoricoDia } from "../api/types";
 import { formatMetros, parseFechaLocal } from "../format";
 import { LEAD_DIAS_COMPARADO, RANGO_PRECISION_DIAS } from "../domain/dominio";
 import { PALETA, TRAZOS, fondoTrazoCss, leerVariableCss, propsTrazoUplot } from "../graficos/paleta";
+import { crearTooltipGrafico } from "../graficos/tooltip";
 import { onTemaCambia } from "../theme";
 
 function fechaISOLocal(fecha: Date): string {
@@ -70,6 +71,36 @@ export function buildResumenTextoPrecision(series: PrecisionSeries): string {
   return `Altura real en el período: entre ${formatMetros(min)} y ${formatMetros(max)}, comparada día a día con lo que decía el pronóstico hecho ${String(LEAD_DIAS_COMPARADO)} días antes.`;
 }
 
+const tooltipFechaFormatter = new Intl.DateTimeFormat("es-AR", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+});
+
+/**
+ * Pure (spec 019 D2): qué dice el tooltip en el día `idx`, o `null` si ese
+ * día no tiene ningún valor -- las dos series tienen huecos (la real termina
+ * hoy, la del pronóstico empieza más tarde), y un tooltip vacío flotando
+ * sobre el gráfico es peor que ninguno.
+ */
+export function contenidoTooltipPrecision(series: PrecisionSeries, idx: number): string | null {
+  const x = series.x[idx];
+  if (x === undefined) return null;
+  const real = series.real[idx] ?? null;
+  const pronosticado = series.pronosticado[idx] ?? null;
+  if (real === null && pronosticado === null) return null;
+
+  const filas: string[] = [];
+  if (real !== null) filas.push(`<div>Midió ${formatMetros(real)}</div>`);
+  if (pronosticado !== null) filas.push(`<div>Decía ${formatMetros(pronosticado)}</div>`);
+  // La diferencia es el dato que este gráfico existe para mostrar.
+  if (real !== null && pronosticado !== null) {
+    filas.push(`<div class="grafico-tooltip-nota">Le erró ${formatMetros(Math.abs(real - pronosticado))}</div>`);
+  }
+  const fecha = tooltipFechaFormatter.format(new Date(x * 1000));
+  return `<strong>${fecha}</strong>${filas.join("")}`;
+}
+
 export interface PrecisionDeps {
   getAlturasDiarias: typeof getAlturasDiarias;
   getPronosticoHistorico: typeof getPronosticoHistorico;
@@ -104,7 +135,10 @@ export function mountPrecision(container: HTMLElement, deps: PrecisionDeps = def
   container.innerHTML = `
     <h2>¿Cuánto acierta el pronóstico?</h2>
     <p class="precision-frase" id="precision-frase"></p>
-    <div class="grafico-canvas" id="precision-canvas"></div>
+    <div class="grafico-canvas-wrap">
+      <div class="grafico-canvas" id="precision-canvas"></div>
+      <div class="grafico-tooltip" id="precision-tooltip" hidden></div>
+    </div>
     <ul class="grafico-leyenda" id="precision-leyenda" aria-hidden="true"></ul>
     <p class="grafico-estado" role="status" aria-live="polite"></p>
     <details class="grafico-alternativa">
@@ -115,10 +149,19 @@ export function mountPrecision(container: HTMLElement, deps: PrecisionDeps = def
 
   const fraseEl = container.querySelector<HTMLParagraphElement>("#precision-frase");
   const canvasEl = container.querySelector<HTMLDivElement>("#precision-canvas");
+  const wrapEl = container.querySelector<HTMLDivElement>(".grafico-canvas-wrap");
+  const tooltipEl = container.querySelector<HTMLDivElement>("#precision-tooltip");
   const leyendaEl = container.querySelector<HTMLUListElement>("#precision-leyenda");
   const estadoEl = container.querySelector<HTMLParagraphElement>(".grafico-estado");
   const resumenEl = container.querySelector<HTMLParagraphElement>(".grafico-resumen");
-  if (!fraseEl || !canvasEl || !leyendaEl || !estadoEl || !resumenEl) return { destroy(): void {} };
+  if (!fraseEl || !canvasEl || !leyendaEl || !estadoEl || !resumenEl || !wrapEl || !tooltipEl) {
+    return { destroy(): void {} };
+  }
+
+  // Lee `ultimaSeries` en cada llamada, así sobrevive a un redibujo por tema.
+  const tooltip = crearTooltipGrafico(wrapEl, tooltipEl, (idx) =>
+    ultimaSeries ? contenidoTooltipPrecision(ultimaSeries, idx) : null,
+  );
 
   /** (Re)dibuja a partir de la serie ya calculada, releyendo la paleta en cada llamada (reactividad al tema). */
   function dibujar(series: PrecisionSeries): void {
@@ -131,6 +174,7 @@ export function mountPrecision(container: HTMLElement, deps: PrecisionDeps = def
     renderLeyendaPrecision(leyendaEl, colorReal, colorPronostico);
 
     instancia?.destroy();
+    tooltip.ocultar();
     canvasEl.replaceChildren();
     const width = Math.max(280, canvasEl.clientWidth || container.clientWidth || 320);
     instancia = new uPlot(
@@ -174,6 +218,7 @@ export function mountPrecision(container: HTMLElement, deps: PrecisionDeps = def
           },
         ],
         legend: { show: false },
+        plugins: [tooltip.plugin],
       },
       [series.x, series.real, series.pronosticado],
       canvasEl,

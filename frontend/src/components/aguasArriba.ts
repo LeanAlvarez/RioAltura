@@ -3,8 +3,9 @@ import "uplot/dist/uPlot.min.css";
 import type { FetchResult } from "../api/client";
 import { getPronostico, getPronosticoAguasArriba } from "../api/pronostico";
 import type { DiaPronostico, PronosticoAguasArriba } from "../api/types";
-import { calcularTendencia, formatDiaSemanaFecha, formatRangoMetros, parseFechaLocal, type Tendencia } from "../format";
+import { calcularTendencia, formatDiaSemanaFecha, formatMetros, formatRangoMetros, parseFechaLocal, type Tendencia } from "../format";
 import { PALETA, TRAZOS, fondoTrazoCss, leerVariableCss, propsTrazoUplot } from "../graficos/paleta";
+import { crearTooltipGrafico, type TooltipGrafico } from "../graficos/tooltip";
 import { onTemaCambia } from "../theme";
 import { renderCardError, renderCardSkeleton } from "./card";
 
@@ -40,6 +41,33 @@ export function deriveAguasArribaView(state: AguasArribaState): AguasArribaView 
 
 function fechaAEpochSegundos(fechaIso: string): number {
   return Math.floor(parseFechaLocal(fechaIso).getTime() / 1000);
+}
+
+const tooltipFechaFormatter = new Intl.DateTimeFormat("es-AR", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+});
+
+/**
+ * Pure (spec 019 D2): qué dice el tooltip en el día `idx`. Las dos series
+ * tienen huecos, así que un día sin ninguno de los dos valores no muestra
+ * nada en vez de un tooltip vacío.
+ */
+export function contenidoTooltipAguasArriba(
+  series: AguasArribaChartSeries,
+  idx: number,
+): string | null {
+  const x = series.x[idx];
+  if (x === undefined) return null;
+  const colon = series.colon[idx] ?? null;
+  const arriba = series.aguasArriba[idx] ?? null;
+  if (colon === null && arriba === null) return null;
+  const filas: string[] = [];
+  if (colon !== null) filas.push(`<div>Colón ${formatMetros(colon)}</div>`);
+  if (arriba !== null) filas.push(`<div>Aguas arriba ${formatMetros(arriba)}</div>`);
+  const fecha = tooltipFechaFormatter.format(new Date(x * 1000));
+  return `<strong>${fecha}</strong>${filas.join("")}`;
 }
 
 export interface AguasArribaChartSeries {
@@ -108,7 +136,10 @@ export function renderAguasArriba(container: HTMLElement, view: AguasArribaView)
     <p class="frase-pronostico">${view.frase}</p>
     ${tendenciaHtml}
     <div class="aguas-arriba-chart-wrap">
-      <div class="grafico-canvas" id="aguas-arriba-canvas"></div>
+      <div class="grafico-canvas-wrap">
+        <div class="grafico-canvas" id="aguas-arriba-canvas"></div>
+        <div class="grafico-tooltip" id="aguas-arriba-tooltip" hidden></div>
+      </div>
       <ul class="grafico-leyenda" id="aguas-arriba-leyenda" aria-hidden="true"></ul>
     </div>
   `;
@@ -129,9 +160,21 @@ function dibujarMiniChart(
   referenciaColores: HTMLElement,
   series: AguasArribaChartSeries,
   ref: { instancia: uPlot | null },
+  tooltip: TooltipGrafico | null,
 ): void {
-  const colorColon = leerVariableCss("--graf-pronostico", PALETA.light.pronostico, referenciaColores);
-  const colorAguasArriba = leerVariableCss("--graf-historico", PALETA.light.historico, referenciaColores);
+  /*
+   * Acá el COLOR ES EL LUGAR y el GUIÓN ES EL TIPO de dato. Las dos líneas
+   * son pronósticos, así que las dos van punteadas; lo que las distingue es
+   * dónde se mide. Colón se queda con el azul que en toda la app significa
+   * "acá", y aguas arriba con el verde.
+   *
+   * Antes leían `--graf-pronostico` y `--graf-historico`, que desde la spec
+   * 018 son EL MISMO COLOR: las dos líneas quedaban idénticas salvo por el
+   * patrón de guiones. Dos lugares distintos sí son identidad y merecen hue
+   * propio (`dataviz`, paleta categórica).
+   */
+  const colorColon = leerVariableCss("--graf-altura-real", PALETA.light.alturaReal, referenciaColores);
+  const colorAguasArriba = leerVariableCss("--graf-pronostico", PALETA.light.pronostico, referenciaColores);
   const colorEje = leerVariableCss("--graf-eje", PALETA.light.ejeTexto, referenciaColores);
   const colorGrilla = leerVariableCss("--graf-grilla", PALETA.light.grilla, referenciaColores);
 
@@ -184,6 +227,7 @@ function dibujarMiniChart(
         },
       ],
       legend: { show: false },
+      plugins: tooltip ? [tooltip.plugin] : [],
     },
     [series.x, series.colon, series.aguasArriba],
     canvasEl,
@@ -197,12 +241,22 @@ export interface MontajeMiniChartAguasArriba {
 function mountMiniChartAguasArriba(container: HTMLElement, series: AguasArribaChartSeries): MontajeMiniChartAguasArriba {
   const canvasEl = container.querySelector<HTMLDivElement>("#aguas-arriba-canvas");
   const leyendaEl = container.querySelector<HTMLUListElement>("#aguas-arriba-leyenda");
+  const wrapEl = container.querySelector<HTMLDivElement>(".grafico-canvas-wrap");
+  const tooltipEl = container.querySelector<HTMLDivElement>("#aguas-arriba-tooltip");
   if (!canvasEl || !leyendaEl) return { destroy(): void {} };
 
-  const ref: { instancia: uPlot | null } = { instancia: null };
-  dibujarMiniChart(canvasEl, leyendaEl, container, series, ref);
+  const tooltip =
+    wrapEl && tooltipEl
+      ? crearTooltipGrafico(wrapEl, tooltipEl, (idx) => contenidoTooltipAguasArriba(series, idx))
+      : null;
 
-  const desuscribirTema = onTemaCambia(() => dibujarMiniChart(canvasEl, leyendaEl, container, series, ref));
+  const ref: { instancia: uPlot | null } = { instancia: null };
+  dibujarMiniChart(canvasEl, leyendaEl, container, series, ref, tooltip);
+
+  const desuscribirTema = onTemaCambia(() => {
+    tooltip?.ocultar();
+    dibujarMiniChart(canvasEl, leyendaEl, container, series, ref, tooltip);
+  });
 
   function manejarResize(): void {
     if (ref.instancia && canvasEl) ref.instancia.setSize({ width: Math.max(240, canvasEl.clientWidth), height: 150 });

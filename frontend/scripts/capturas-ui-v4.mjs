@@ -2,9 +2,9 @@
 // temas. Mide lo que una captura no muestra: qué se ve sin scrollear, si el
 // contexto arranca plegado, y si hay overflow horizontal.
 //
-// Uso: node scripts/capturas-ui-v4.mjs   (con `pnpm dev` levantado)
+// Uso: URL=http://localhost:<WEB_PORT>/ node scripts/capturas-ui-v4.mjs
 import { chromium } from "@playwright/test";
-const URL = process.env.URL ?? "http://localhost:5176/";
+const URL = process.env.URL ?? `http://localhost:/`;
 const b = await chromium.launch();
 let fallo = false;
 for (const [w, h] of [[360, 780], [390, 844], [768, 1000], [1280, 900]]) {

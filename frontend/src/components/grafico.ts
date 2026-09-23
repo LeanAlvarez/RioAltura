@@ -6,6 +6,7 @@ import type { AlturaDiaria, DiaPronostico, HistoricoDia } from "../api/types";
 import { ALERTA_M, EVACUACION_EN_SECO_M, EVACUACION_M } from "../domain/dominio";
 import { formatDiaSemanaFecha, formatMetros, formatRangoMetros, parseFechaLocal } from "../format";
 import { PALETA, TRAZOS, fondoTrazoCss, leerVariableCss, propsTrazoUplot, type RolLinea } from "../graficos/paleta";
+import { crearTooltipGrafico } from "../graficos/tooltip";
 import { onTemaCambia } from "../theme";
 
 export type RangoDias = 30 | 90 | 365;
@@ -199,6 +200,7 @@ function construirOpciones(
   width: number,
   mostrarHistorico: boolean,
   colores: ReturnType<typeof construirColores>,
+  tooltipPlugin: uPlot.Plugin,
 ): uPlot.Options {
   const uPlotSeries: uPlot.Series[] = [
     {},
@@ -273,6 +275,7 @@ function construirOpciones(
       },
     ],
     cursor: { points: { show: true } },
+    plugins: [tooltipPlugin],
     // La leyenda de uPlot muestra "--" hasta que hay cursor: se elimina y se
     // escribe una propia en el DOM (ver `construirLeyenda`). Los umbrales
     // etiquetados también se dibujan aparte, como HTML (ver
@@ -409,36 +412,10 @@ export function mountGrafico(container: HTMLElement, deps: GraficoDeps = default
     return { destroy(): void {} };
   }
 
-  function mostrarTooltip(idx: number, left: number, top: number): void {
-    if (!ultimaSeries || !tooltipEl || !canvasWrapEl) return;
-    const contenido = contenidoTooltip(ultimaSeries, idx);
-    if (!contenido) {
-      tooltipEl.hidden = true;
-      return;
-    }
-    tooltipEl.innerHTML = contenido;
-    tooltipEl.hidden = false;
-    const maxLeft = canvasWrapEl.clientWidth - tooltipEl.offsetWidth - 4;
-    tooltipEl.style.left = `${Math.max(4, Math.min(left + 12, maxLeft))}px`;
-    tooltipEl.style.top = `${Math.max(4, top - 12)}px`;
-  }
+  const tooltip = crearTooltipGrafico(canvasWrapEl, tooltipEl, (idx) =>
+    ultimaSeries ? contenidoTooltip(ultimaSeries, idx) : null,
+  );
 
-  function ocultarTooltip(): void {
-    if (tooltipEl) tooltipEl.hidden = true;
-  }
-
-  /**
-   * `cursor.left`/`top` y `.u-over`'s propio rect están en CSS pixels
-   * *relativos al área de trazado* (sin el eje Y ni sus números). El
-   * tooltip, en cambio, se posiciona relativo a `.grafico-canvas-wrap`
-   * (todo el gráfico). Este es el desplazamiento entre ambos orígenes.
-   */
-  function offsetAreaTrazadoEnWrap(): { x: number; y: number } {
-    if (!instancia || !canvasWrapEl) return { x: 0, y: 0 };
-    const overRect = instancia.over.getBoundingClientRect();
-    const wrapRect = canvasWrapEl.getBoundingClientRect();
-    return { x: overRect.left - wrapRect.left, y: overRect.top - wrapRect.top };
-  }
 
   /**
    * (Re)dibuja el gráfico a partir de `series` ya calculada, releyendo la
@@ -453,48 +430,19 @@ export function mountGrafico(container: HTMLElement, deps: GraficoDeps = default
     renderLeyenda(leyendaEl, construirItemsLeyenda(colores, estado.mostrarHistorico));
 
     instancia?.destroy();
+    tooltip.ocultar();
     const width = Math.max(280, canvasEl.clientWidth || container.clientWidth || 320);
     canvasEl.replaceChildren();
     instancia = new uPlot(
-      construirOpciones(width, estado.mostrarHistorico, colores),
+      construirOpciones(width, estado.mostrarHistorico, colores, tooltip.plugin),
       construirDatos(series, estado.mostrarHistorico),
       canvasEl,
     );
 
-    instancia.over.addEventListener("mouseleave", ocultarTooltip);
-    instancia.over.addEventListener("mousemove", () => {
-      if (!instancia) return;
-      const idx = instancia.cursor.idx;
-      if (idx === null || idx === undefined) return;
-      const offset = offsetAreaTrazadoEnWrap();
-      mostrarTooltip(idx, offset.x + (instancia.cursor.left ?? 0), offset.y + (instancia.cursor.top ?? 0));
-    });
-    // Táctil: uPlot no traduce touch a cursor por defecto; se calcula el
-    // índice más cercano a mano a partir de la posición X tocada.
-    instancia.over.addEventListener(
-      "touchstart",
-      (ev) => {
-        if (!instancia || !ultimaSeries) return;
-        const touch = ev.touches[0];
-        if (!touch) return;
-        const rect = instancia.over.getBoundingClientRect();
-        const left = touch.clientX - rect.left;
-        const top = touch.clientY - rect.top;
-        const valorX = instancia.posToVal(left, "x");
-        let idx = 0;
-        let mejor = Infinity;
-        ultimaSeries.x.forEach((x, i) => {
-          const dist = Math.abs(x - valorX);
-          if (dist < mejor) {
-            mejor = dist;
-            idx = i;
-          }
-        });
-        const offset = offsetAreaTrazadoEnWrap();
-        mostrarTooltip(idx, offset.x + left, offset.y + top);
-      },
-      { passive: true },
-    );
+    // El tooltip lo maneja el plugin compartido (spec 019): el hook
+    // `setCursor` de uPlot se dispara igual con mouse que con el dedo, así
+    // que acá había además 30 líneas de cálculo táctil a mano que ya no
+    // hacen falta.
 
     const etiquetasUmbrales = crearEtiquetasUmbrales(canvasWrapEl, colores);
     umbralesActuales = etiquetasUmbrales;
@@ -509,7 +457,7 @@ export function mountGrafico(container: HTMLElement, deps: GraficoDeps = default
   async function actualizar(): Promise<void> {
     if (!estadoEl || !canvasEl || !canvasWrapEl || !resumenEl || !leyendaEl) return;
     estadoEl.textContent = "Cargando…";
-    ocultarTooltip();
+    tooltip.ocultar();
 
     const ahora = new Date();
     const { desde, hasta } = calcularRangoFechas(estado.rango, ahora);
