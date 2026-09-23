@@ -111,27 +111,118 @@ la privacidad.
 
 ## Criterios de aceptación
 
-- [ ] El vecino puede marcar un punto tocando el mapa, y ve la altura a la que se moja.
-- [ ] **La coordenada nunca se envía al servidor**, verificado inspeccionando el tráfico de red.
-- [ ] La búsqueda usa a lo sumo ~6 capas, no las 43.
-- [ ] El punto sobrevive a recargar la página, y la app funciona si `localStorage` falla.
-- [ ] El botón de avisos arma el link de Telegram con la altura ya cargada.
-- [ ] El disclaimer se ve junto a la respuesta, **siempre**, y no se puede cerrar.
-- [ ] La altura se muestra redondeada al escalón de las capas.
-- [ ] Los tres casos de borde (fuera del área, ya inundado a 3 m, seco a 20 m) tienen su texto y su
-      test.
-- [ ] El FAQ explica que el punto se guarda sólo en el navegador y que no se envía a ningún lado.
-- [ ] Funciona a 360 px, en ambos temas.
-- [ ] `ruff`, `pytest`, `pnpm build` y `pnpm test` pasan.
+- [x] El vecino puede marcar un punto tocando el mapa, y ve la altura a la que se moja.
+      Verificado en navegador (Playwright, `pnpm dev` real): click → tarjeta "Mi casa" muestra la
+      altura calculada (ver "Cómo verificar").
+- [x] **La coordenada nunca se envía al servidor**, verificado inspeccionando el tráfico de red.
+      `frontend/scripts/verificar-mi-casa-privacidad.mjs`: 0 coincidencias de la lat/lng clickeada
+      (probada con 3-6 decimales, con punto y con coma) en ninguna URL ni body de ninguna request
+      posterior al click.
+- [x] La búsqueda usa a lo sumo ~6 capas, no las 43. Verificado por test unitario
+      (`domain/miCasa.test.ts`, cuenta las llamadas a `cache.get`) y en navegador real: **6
+      requests de capas GeoJSON tras el click**, exactamente `ceil(log2(43))`.
+- [x] El punto sobrevive a recargar la página, y la app funciona si `localStorage` falla.
+      Persistencia verificada en navegador (marcador y resultado reaparecen tras `page.reload()`);
+      el "nunca lanza" de `leerPuntoGuardado`/`guardarPunto` está cubierto por
+      `miCasaStorage.test.ts` con un storage que tira `DOMException` en cada llamada.
+- [x] El botón de avisos arma el link de Telegram con la altura ya cargada. `precargarUmbral`
+      (`avisosTelegram.ts`) llamada desde `mountMiCasa`; verificado visualmente en navegador (sin
+      test unitario: requiere `querySelector` sobre DOM real, y el entorno de vitest del repo es
+      `"node"`, sin jsdom — mismo criterio que el resto de `mountAvisosTelegram`).
+- [x] El disclaimer se ve junto a la respuesta, **siempre**, y no se puede cerrar. Testeado
+      (`miCasa.test.ts`: el HTML nunca incluye `<button`) y confirmado en navegador.
+- [x] La altura se muestra redondeada al escalón de las capas. La búsqueda binaria devuelve
+      `entry.h` tal cual, sin cálculo adicional (`domain/miCasa.test.ts`, test "la altura devuelta
+      es exactamente la de la capa encontrada").
+- [x] Los tres casos de borde (fuera del área, ya inundado a 3 m, seco a 20 m) tienen su texto y su
+      test. `domain/miCasa.test.ts` (`buscarAlturaInundacion`, `deriveMiCasaView`) y
+      `components/miCasa.test.ts`.
+- [x] El FAQ explica que el punto se guarda sólo en el navegador y que no se envía a ningún lado.
+      Entrada "privacidad" extendida en `faq.ts`; test existente sigue verde.
+- [x] Funciona a 360 px, en ambos temas. Verificado en navegador: 336 px de ancho de tarjeta a 360
+      px de viewport, sin overflow horizontal de la página, en `light` y en `dark`.
+- [x] `ruff`, `pytest`, `pnpm build` y `pnpm test` pasan. Ver "Cómo verificar" para los resultados
+      literales.
 
 ## Cómo verificar
 
-(La completa el agente.)
+```bash
+cd /Users/leandroalvarez/orca/workspaces/RioAltura/micasa
+set -a; . ./.env.local 2>/dev/null; set +a
+
+# Backend/worker (sin cambios en esta spec; confirmado que siguen pasando)
+uv run ruff check .            # All checks passed!
+uv run ruff format --check .   # 117 files already formatted
+uv run pytest -q               # 335 passed, 4 skipped, 3 deselected
+
+# Frontend
+pnpm -C frontend install
+pnpm -C frontend exec tsc --noEmit   # sin salida = OK
+pnpm -C frontend build               # OK (tsc --noEmit && vite build)
+pnpm -C frontend test                # 292 passed (30 archivos)
+
+# Navegador (con el server de dev del worktree corriendo, puerto de .env.local: 5203)
+pnpm -C frontend dev --host 127.0.0.1 --port "$WEB_PORT" &
+URL="http://127.0.0.1:$WEB_PORT" node frontend/scripts/verificar-mi-casa-privacidad.mjs
+```
+
+Resultado real del script de privacidad (T9), corrido contra el dev server real:
+
+```
+✓ el mapa expone window.mapaInundacion con un método containerPointToLatLng utilizable
+✓ el disclaimer fijo (C5) aparece junto a la respuesta
+✓ el disclaimer no tiene ningún botón para cerrarlo
+6 requests después del click.
+✓ ninguna URL ni body de las requests posteriores al click contiene la lat/lng clickeada
+  Punto clickeado: lat=-32.21037850723933, lng=-58.144969940185554
+Capas GeoJSON pedidas después del click: 6 (h_0825, h_1150, h_1600, h_1300, h_1500, h_1400.geojson)
+✓ se consultan a lo sumo 6 capas después del click (ceil(log2(43))), no las 43
+OK: la coordenada de Mi casa nunca sale del dispositivo.
+```
+
+Verificación manual adicional en navegador (Playwright, script ad-hoc no commiteado — sólo
+`verificar-mi-casa-privacidad.mjs` queda en el repo, spec 015 T9 pidió uno solo):
+
+- **Persistencia**: se marca un punto, se recarga la página (`page.reload()`) y tanto el marcador
+  naranja "Mi casa" como el resultado de la tarjeta reaparecen sin volver a tocar el mapa.
+- **360 px, ambos temas**: tarjeta "Mi casa" con 336 px de ancho a 360 px de viewport, sin
+  overflow horizontal de la página, en `colorScheme: "light"` y `"dark"`.
+- **3 puntos reales de Colón** (lat/lng aproximados, buscados a partir de `PUERTO_HIDROMETRO` y
+  `COLON_CENTER` en `map.ts`; resultados reales, no supuestos):
+  - Hidrómetro del puerto / costanera (`-32.2147, -58.137`, la misma coordenada de
+    `PUERTO_HIDROMETRO`): **se moja a 4,25 m** — bajo, como se esperaba de un punto de la
+    costanera. (Un click de mouse *literal* ahí lo intercepta el propio marcador del hidrómetro,
+    que tiene su popup — se confirmó disparando el mismo evento `click` de Leaflet que dispara un
+    click real, que pasa por el mismo handler de `map.ts`, para separar esa interferencia de
+    marcador de la lógica de la app.)
+  - Centro de la ciudad (`-32.2205, -58.155`): **"no se moja ni con el río en 20,00 m"** — seco en
+    todo el rango modelado, como se esperaba de un punto alejado del río.
+  - Fuera del área modelada (`-33.0, -58.145`, bien al sur del `bbox` real
+    `[-58.35, -32.35, -57.95, -32.1]`): **"Ese punto queda fuera del área que mapeamos"**.
 
 ## Hallazgos
 
-(La completa el agente.)
+- `#tarjeta-telegram` no tiene ningún `grid-area` asignado en ninguno de los 3 breakpoints de
+  `style.css` (cae en el flujo implícito de la grilla). Es preexistente a esta spec — no se tocó,
+  porque no es parte del alcance de "Mi casa" y la instrucción del repo es anotar hallazgos fuera
+  de alcance, no arreglarlos en silencio.
+- Decisión de diseño no explicitada en la spec ni en `odd/tasks/mi-casa.md`: el reordenamiento de
+  coordenadas `{lat, lng}` (Leaflet) → `[lng, lat]` (GeoJSON) se implementó en
+  `domain/miCasa.ts` (función testeada), no en `map.ts` como sugería la exploración previa —
+  `map.ts` no tiene test unitario (toca DOM/Leaflet real), así que mover esa conversión a una
+  función pura y testeada reduce el riesgo de invertir el orden por error. El comportamiento
+  observable es el mismo.
+- `mountAvisosTelegram`/`precargarUmbral`/`mountMiCasa` no tienen test unitario porque tocan
+  `document.querySelector` sobre DOM real, y el `vitest.config` de este repo usa
+  `environment: "node"` (sin jsdom) — mismo criterio ya establecido por `mountThemeToggle` y
+  `mountAvisosTelegram` antes de esta spec. Se verificaron a mano en navegador real (ver "Cómo
+  verificar").
 
 ## Resumen final
 
-(La completa el agente, máximo 5 líneas.)
+Implementado "Mi casa" (C1-C5): búsqueda binaria (~6 de 43 capas) con ray-casting propio
+(`pointInPolygon.ts`), 100% client-side — verificado con script de red que ninguna request lleva
+la coordenada. Persiste en `localStorage` (patrón de `theme.ts`), precarga el umbral de Telegram,
+y siempre muestra el disclaimer fijo de C5, sin botón de cerrar. `ruff`/`pytest`/`tsc`/`build`/
+`vitest` pasan (292 tests nuevos+existentes en frontend, 335 en backend/worker sin cambios).
+Hallazgo fuera de alcance: `#tarjeta-telegram` sin `grid-area` (preexistente, no tocado).

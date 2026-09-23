@@ -206,6 +206,7 @@ body {
     "proximos"
     "mapa"
     "mapa-disclaimer"
+    "mi-casa"
     "superficie"
     "grafico"
     "umbrales"
@@ -241,6 +242,7 @@ body {
       "umbrales umbrales"
       "mapa mapa"
       "mapa-disclaimer mapa-disclaimer"
+      "mi-casa mi-casa"
       "superficie superficie"
       "grafico aguas-arriba"
       "grafico contexto"
@@ -270,6 +272,7 @@ body {
       "hoy proximos umbrales"
       "mapa mapa mapa"
       "mapa-disclaimer mapa-disclaimer mapa-disclaimer"
+      "mi-casa mi-casa mi-casa"
       "superficie superficie superficie"
       "grafico grafico aguas-arriba"
       "grafico grafico contexto"
@@ -294,6 +297,9 @@ body {
 }
 #tarjeta-mapa {
   grid-area: mapa;
+}
+#tarjeta-mi-casa {
+  grid-area: mi-casa;
 }
 #tarjeta-superficie {
   grid-area: superficie;
@@ -377,6 +383,40 @@ body {
   border-top: 1px solid var(--border);
   font-size: 0.75rem;
   color: var(--muted);
+}
+
+/* --- Tarjeta Mi casa (spec 015) --- */
+
+.mi-casa-resultado {
+  margin: 0;
+}
+
+.mi-casa-altura {
+  margin: 0 0 0.2rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.mi-casa-mensaje {
+  margin: 0;
+  color: var(--fg);
+}
+
+/*
+ * El disclaimer de "Mi casa" (C5, la parte más importante de la spec) es
+ * más visible que `.disclaimer-corta`: acompaña a un cálculo puntual y
+ * específico por punto, no al mapa en general, y por eso necesita destacarse
+ * -- no una línea gris de pie de tarjeta. Nunca lleva un botón de cerrar.
+ */
+.mi-casa-disclaimer {
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--skeleton);
+  font-size: 0.8rem;
+  color: var(--fg);
 }
 
 /* --- Tarjeta Hoy --- */
@@ -1169,6 +1209,20 @@ body {
    que el resto de los controles fijos sobre las teselas (ver más abajo). */
 .hidrometro-tooltip {
   --fg: #1c2430;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.92);
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+/* Rótulo permanente de "Mi casa" (spec 015): mismas reglas que el del
+   hidrómetro, con el color del marcador naranja en vez del azul del puerto,
+   para que el texto y no sólo el color distingan los dos marcadores. */
+.mi-casa-tooltip {
+  --fg: #e6550d;
   padding: 0.15rem 0.4rem;
   font-size: 0.72rem;
   font-weight: 600;

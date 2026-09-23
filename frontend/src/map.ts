@@ -12,6 +12,9 @@ import {
   type MedicionActual,
   type VistaMapa,
 } from "./capas";
+// Import de sólo tipo (spec 015): sin ciclo de import en tiempo de ejecución,
+// `domain/miCasa.ts` no importa nada de este módulo.
+import type { PuntoMapa } from "./domain/miCasa";
 
 // Colón, Entre Ríos. See specs/001-infra.md.
 export const COLON_CENTER: L.LatLngTuple = [-32.215, -58.145];
@@ -47,6 +50,9 @@ const COLOR_CLASE: Record<1 | 2 | 3, string> = {
   3: "#08519c",
 };
 
+/** Marcador de "Mi casa" (spec 015): naranja, bien distinto de las capas azules y del hidrómetro. */
+const COLOR_MI_CASA = "#e6550d";
+
 function estiloClase(clase: unknown): L.PathOptions {
   const c = clase === 2 || clase === 3 ? clase : 1;
   return {
@@ -73,6 +79,14 @@ export interface MapaInundacion {
   seleccionar(h: number): void;
   /** Se dispara con cada cambio de selección (slider, escenario o `seleccionar`), spec 007 T7. */
   onSeleccionCambia(listener: (h: number) => void): () => void;
+  /**
+   * Marca (o remarca) el punto de "Mi casa" en el mapa (spec 015). No calcula
+   * nada -- sólo dibuja; el cálculo lo dispara quien escuche `onMiCasaClick`
+   * o llame a esto directamente (p. ej. al restaurar el punto guardado).
+   */
+  marcarMiCasa(punto: PuntoMapa): void;
+  /** Se dispara con cada click del vecino en el lienzo (spec 015, C1/C2). */
+  onMiCasaClick(listener: (punto: PuntoMapa) => void): () => void;
   destroy(): void;
 }
 
@@ -108,6 +122,42 @@ function suscribirSeleccion(listener: (h: number) => void): () => void {
   nivelListeners.add(listener);
   if (ultimaSeleccion !== null) listener(ultimaSeleccion);
   return () => nivelListeners.delete(listener);
+}
+
+// --- "Mi casa" (spec 015): mismo patrón module-scope que la selección de
+// arriba, así `components/miCasa.ts` puede suscribirse sin depender de que
+// `createMap` ya haya corrido (spec 007 ya resolvió este mismo problema para
+// el slider/curva de hectáreas).
+
+const miCasaClickListeners = new Set<(punto: PuntoMapa) => void>();
+
+function emitirMiCasaClick(punto: PuntoMapa): void {
+  for (const listener of miCasaClickListeners) listener(punto);
+}
+
+function suscribirMiCasaClick(listener: (punto: PuntoMapa) => void): () => void {
+  miCasaClickListeners.add(listener);
+  return () => miCasaClickListeners.delete(listener);
+}
+
+/** `index`/`cache` recién creados por `createMap`, para que "Mi casa" reuse la misma caché que el mapa (C2). */
+export interface CapaIndexListo {
+  index: CapaIndex;
+  cache: CapaCache;
+}
+
+let ultimoIndexListo: CapaIndexListo | null = null;
+const indexListoListeners = new Set<(ctx: CapaIndexListo) => void>();
+
+function emitirIndexListo(ctx: CapaIndexListo): void {
+  ultimoIndexListo = ctx;
+  for (const listener of indexListoListeners) listener(ctx);
+}
+
+function suscribirIndexListo(listener: (ctx: CapaIndexListo) => void): () => void {
+  indexListoListeners.add(listener);
+  if (ultimoIndexListo !== null) listener(ultimoIndexListo);
+  return () => indexListoListeners.delete(listener);
 }
 
 interface Panel {
@@ -319,6 +369,7 @@ export function createMap(container: HTMLElement): MapaInundacion {
   let pendienteActual: MedicionActual | null = null;
   let pendientePronosticado: number | null = null;
   let pendienteSeleccion: number | null = null;
+  let pendienteMiCasa: PuntoMapa | null = null;
 
   // Until (or unless) index.json loads, the public API is a no-op that just
   // remembers the last requested values — spec 005 can call it unconditionally.
@@ -326,6 +377,7 @@ export function createMap(container: HTMLElement): MapaInundacion {
     setNivelActual(medicion: MedicionActual): void;
     setNivelPronosticado(h: number): void;
     seleccionar(h: number): void;
+    marcarMiCasa(punto: PuntoMapa): void;
   } = {
     setNivelActual(medicion) {
       pendienteActual = medicion;
@@ -336,6 +388,9 @@ export function createMap(container: HTMLElement): MapaInundacion {
     seleccionar(h) {
       pendienteSeleccion = h;
     },
+    marcarMiCasa(punto) {
+      pendienteMiCasa = punto;
+    },
   };
 
   void fetchCapaIndex()
@@ -344,8 +399,40 @@ export function createMap(container: HTMLElement): MapaInundacion {
 
       const estado = createEstadoMapa(index);
       const cache = createCapaCache();
+      emitirIndexListo({ index, cache });
       const resumen = crearResumenSiempreVisible(resumenWrap, index);
       const panel = crearPanel(panelWrap, index, estado);
+
+      // "Mi casa" (spec 015): un único marcador que se remarca en cada click
+      // o al restaurar el punto guardado, nunca uno nuevo por click.
+      let miCasaMarker: L.CircleMarker | null = null;
+      function marcarMiCasaEnMapa(punto: PuntoMapa): void {
+        const latlng: L.LatLngTuple = [punto.lat, punto.lng];
+        if (miCasaMarker) {
+          miCasaMarker.setLatLng(latlng);
+          return;
+        }
+        miCasaMarker = L.circleMarker(latlng, {
+          radius: 9,
+          weight: 2,
+          color: "#ffffff",
+          fillColor: COLOR_MI_CASA,
+          fillOpacity: 1,
+        })
+          .addTo(map)
+          .bindTooltip("Mi casa", {
+            permanent: true,
+            direction: "top",
+            offset: [0, -9],
+            className: "mi-casa-tooltip",
+          })
+          .bindPopup("Mi casa");
+      }
+      map.on("click", (e: L.LeafletMouseEvent) => {
+        const punto: PuntoMapa = { lat: e.latlng.lat, lng: e.latlng.lng };
+        marcarMiCasaEnMapa(punto);
+        emitirMiCasaClick(punto);
+      });
 
       let capaActual: L.GeoJSON | null = null;
       let solicitudId = 0;
@@ -395,10 +482,12 @@ export function createMap(container: HTMLElement): MapaInundacion {
         setNivelActual: estado.setNivelActual,
         setNivelPronosticado: estado.setNivelPronosticado,
         seleccionar: (h) => estado.seleccionar(h, { porUsuario: true }),
+        marcarMiCasa: marcarMiCasaEnMapa,
       };
       if (pendienteActual !== null) estado.setNivelActual(pendienteActual);
       if (pendientePronosticado !== null) estado.setNivelPronosticado(pendientePronosticado);
       if (pendienteSeleccion !== null) estado.seleccionar(pendienteSeleccion, { porUsuario: true });
+      if (pendienteMiCasa !== null) marcarMiCasaEnMapa(pendienteMiCasa);
     })
     .catch(() => {
       if (destroyed) return;
@@ -419,6 +508,12 @@ export function createMap(container: HTMLElement): MapaInundacion {
     },
     onSeleccionCambia(listener) {
       return suscribirSeleccion(listener);
+    },
+    marcarMiCasa(punto) {
+      api.marcarMiCasa(punto);
+    },
+    onMiCasaClick(listener) {
+      return suscribirMiCasaClick(listener);
     },
     destroy() {
       destroyed = true;
@@ -452,4 +547,18 @@ export function seleccionar(h: number): void {
 
 export function onSeleccionCambia(listener: (h: number) => void): () => void {
   return suscribirSeleccion(listener);
+}
+
+/** Module-level API used by spec 015's `components/miCasa.ts` (it only sees the module). */
+export function marcarMiCasa(punto: PuntoMapa): void {
+  ultimaInstancia?.marcarMiCasa(punto);
+}
+
+export function onMiCasaClick(listener: (punto: PuntoMapa) => void): () => void {
+  return suscribirMiCasaClick(listener);
+}
+
+/** Se dispara (con replay del último valor) en cuanto `index.json` y la `CapaCache` del mapa están listos. */
+export function onCapaIndexListo(listener: (ctx: CapaIndexListo) => void): () => void {
+  return suscribirIndexListo(listener);
 }
