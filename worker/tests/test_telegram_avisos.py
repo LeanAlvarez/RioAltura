@@ -9,6 +9,7 @@ from app.models import Base
 from app.repositories.alturas import AlturaIn, upsert_alturas
 from app.repositories.pronosticos import PronosticoIn, upsert_pronosticos
 from app.repositories.telegram import (
+    actualizar_estado_canal,
     fijar_umbral,
     obtener_estado_canal,
     obtener_suscripcion,
@@ -23,9 +24,24 @@ TOKEN = "123456:FAKE-TEST-TOKEN-not-real"  # noqa: S105 - test fixture only
 CANAL = "@RioUruguayNotificaTest"
 GAUGE = "hybas_6121320620"  # GAUGE_GOOGLE_COLON
 
-# 15:00 UTC == 12:00 America/Argentina/Buenos_Aires, same calendar day.
+# 15:00 UTC == 12:00 America/Argentina/Buenos_Aires, same calendar day: dentro de
+# la ventana diurna default (8-21) y después de la hora default del estado diario (8).
 NOW = datetime(2026, 9, 22, 15, 0, tzinfo=UTC)
 HOY = date(2026, 9, 22)
+
+# 06:00 UTC == 03:00 America/Argentina/Buenos_Aires (M5, madrugada): fuera de la
+# ventana diurna default y antes de la hora default del estado diario.
+NOW_MADRUGADA = datetime(2026, 9, 22, 6, 0, tzinfo=UTC)
+# 11:00 UTC == 08:00 America/Argentina/Buenos_Aires: justo la hora default del
+# estado diario, y ya dentro de la ventana diurna default.
+NOW_MANANA = datetime(2026, 9, 22, 11, 0, tzinfo=UTC)
+
+# Marca cualquier mensaje de cambio de nivel (A1/A3, M3): "— Río Uruguay en
+# Colón" (guion ANTES del nombre) solo aparece en ese formato, nunca en el
+# encabezado del estado diario ("Río Uruguay en Colón — <día>", guion DESPUÉS).
+_MARCA_CAMBIO_NIVEL = "— Río Uruguay en Colón"
+# Marca el estado diario (M1), único mensaje que lleva la línea "Hoy: ...".
+_MARCA_ESTADO_DIARIO = "📏 Hoy:"
 
 
 @pytest.fixture(autouse=True)
@@ -180,7 +196,7 @@ def test_a1_no_publica_hasta_sostenerse_dos_corridas(engine: Engine, enviados: l
 
     telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW)  # 1ra corrida: candidato
 
-    mensajes_nivel = [t for chat, t in enviados if chat == CANAL and "Nuevo nivel" in t]
+    mensajes_nivel = [t for chat, t in enviados if chat == CANAL and _MARCA_CAMBIO_NIVEL in t]
     assert mensajes_nivel == []
     estado = obtener_estado_canal(engine)
     assert estado.nivel_candidato == "atencion"
@@ -197,9 +213,9 @@ def test_a1_publica_al_sostenerse_y_s2_no_reenvia_en_corridas_siguientes(
     telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW)  # candidato
     telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW)  # confirma, publica
 
-    mensajes_canal = [t for chat, t in enviados if chat == CANAL and "Nuevo nivel" in t]
+    mensajes_canal = [t for chat, t in enviados if chat == CANAL and _MARCA_CAMBIO_NIVEL in t]
     assert len(mensajes_canal) == 1
-    assert "Atención" in mensajes_canal[0]
+    assert "ATENCIÓN" in mensajes_canal[0]
 
     estado = obtener_estado_canal(engine)
     assert estado.nivel_publicado == "atencion"
@@ -207,7 +223,7 @@ def test_a1_publica_al_sostenerse_y_s2_no_reenvia_en_corridas_siguientes(
     # S2: una tercera corrida con el mismo nivel (equivalente a "reiniciar el
     # worker" y volver a evaluar) no manda un segundo aviso.
     telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW)
-    mensajes_canal = [t for chat, t in enviados if chat == CANAL and "Nuevo nivel" in t]
+    mensajes_canal = [t for chat, t in enviados if chat == CANAL and _MARCA_CAMBIO_NIVEL in t]
     assert len(mensajes_canal) == 1
 
 
@@ -218,9 +234,7 @@ def test_s1_serie_oscilante_no_dispara_nada(engine: Engine, enviados: list) -> N
         _seed_pronostico(engine, caudal, emitido=NOW + timedelta(hours=i))
         telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW)
 
-    mensajes_nivel = [
-        t for chat, t in enviados if chat == CANAL and ("Nuevo nivel" in t or "normalidad" in t)
-    ]
+    mensajes_nivel = [t for chat, t in enviados if chat == CANAL and _MARCA_CAMBIO_NIVEL in t]
     assert mensajes_nivel == []
 
 
@@ -237,7 +251,7 @@ def test_a3_vuelta_a_la_normalidad_tras_confirmar_atencion(engine: Engine, envia
 
     mensajes = [t for chat, t in enviados if chat == CANAL and "normalidad" in t]
     assert len(mensajes) == 1
-    assert "Sin aviso" in mensajes[0]
+    assert "SIN AVISO" in mensajes[0]
 
 
 def test_sin_canal_id_no_publica_en_el_canal_pero_no_falla(
@@ -261,19 +275,92 @@ def test_a2_estado_diario_se_manda_una_vez_por_dia(engine: Engine, enviados: lis
     _seed_altura(engine)
 
     telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW)
-    mensajes_estado = [t for chat, t in enviados if chat == CANAL and "Estado de hoy" in t]
+    mensajes_estado = [t for chat, t in enviados if chat == CANAL and _MARCA_ESTADO_DIARIO in t]
     assert len(mensajes_estado) == 1
 
     # Misma corrida del día: no se repite.
     telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW)
-    mensajes_estado = [t for chat, t in enviados if chat == CANAL and "Estado de hoy" in t]
+    mensajes_estado = [t for chat, t in enviados if chat == CANAL and _MARCA_ESTADO_DIARIO in t]
     assert len(mensajes_estado) == 1
 
     # Al día siguiente sí se vuelve a mandar.
     manana = NOW.replace(day=23)
     telegram_avisos.publicar_avisos(engine, _FakeClient(), now=manana)
-    mensajes_estado = [t for chat, t in enviados if chat == CANAL and "Estado de hoy" in t]
+    mensajes_estado = [t for chat, t in enviados if chat == CANAL and _MARCA_ESTADO_DIARIO in t]
     assert len(mensajes_estado) == 2
+
+
+# --- M5: horarios según urgencia -----------------------------------------------
+
+
+def test_m5_estado_diario_espera_a_la_hora_configurada(engine: Engine, enviados: list) -> None:
+    """A2 no sale en la primera corrida del día si es antes de la hora configurada (default 8)."""
+    _seed_altura(engine)
+
+    telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW_MADRUGADA)  # 03:00 BA
+    mensajes_estado = [t for chat, t in enviados if chat == CANAL and _MARCA_ESTADO_DIARIO in t]
+    assert mensajes_estado == []
+
+    telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW_MANANA)  # 08:00 BA
+    mensajes_estado = [t for chat, t in enviados if chat == CANAL and _MARCA_ESTADO_DIARIO in t]
+    assert len(mensajes_estado) == 1
+
+    # Misma hora configurada, misma corrida del día: no se repite.
+    telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW_MANANA)
+    mensajes_estado = [t for chat, t in enviados if chat == CANAL and _MARCA_ESTADO_DIARIO in t]
+    assert len(mensajes_estado) == 1
+
+
+def test_m5_cambio_de_nivel_de_noche_no_se_publica_hasta_la_manana(
+    engine: Engine, enviados: list
+) -> None:
+    """Criterio de aceptación: un cambio de nivel detectado de noche espera a la mañana."""
+    _seed_altura(engine)
+    _seed_pronostico(engine, 9_600)  # atencion
+    # El antirebote (S1) ya lleva una corrida sostenida antes de la corrida de
+    # madrugada, para aislar el efecto de la ventana horaria (M5) del de S1.
+    actualizar_estado_canal(engine, nivel_candidato="atencion", corridas_candidato=1)
+
+    telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW_MADRUGADA)  # 03:00 BA
+
+    mensajes_nivel = [t for chat, t in enviados if chat == CANAL and _MARCA_CAMBIO_NIVEL in t]
+    assert mensajes_nivel == []
+    estado = obtener_estado_canal(engine)
+    # El progreso del antirebote no se pierde: sigue sostenido, listo para
+    # publicarse apenas una corrida caiga dentro de la ventana diurna.
+    assert estado.nivel_candidato == "atencion"
+    assert estado.corridas_candidato == 2
+    assert estado.nivel_publicado is None
+
+    telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW_MANANA)  # 08:00 BA
+
+    mensajes_nivel = [t for chat, t in enviados if chat == CANAL and _MARCA_CAMBIO_NIVEL in t]
+    assert len(mensajes_nivel) == 1
+    assert "ATENCIÓN" in mensajes_nivel[0]
+    estado = obtener_estado_canal(engine)
+    assert estado.nivel_publicado == "atencion"
+
+    # No se duplica en una corrida posterior dentro de la ventana (S2).
+    telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW_MANANA)
+    mensajes_nivel = [t for chat, t in enviados if chat == CANAL and _MARCA_CAMBIO_NIVEL in t]
+    assert len(mensajes_nivel) == 1
+
+
+def test_m5_umbral_real_se_publica_de_noche_sin_excepcion(engine: Engine, enviados: list) -> None:
+    """Criterio de aceptación: un umbral real cruzado sí se publica de noche (simulado 3 AM)."""
+    fijar_umbral(engine, chat_id=555, umbral_m=3.5)
+    _seed_altura(engine, altura_m=4.0)  # ya está por encima de 3.5
+
+    telegram_avisos.publicar_avisos(engine, _FakeClient(), now=NOW_MADRUGADA)  # candidato
+    mensajes = [t for chat, t in enviados if chat == "555"]
+    assert mensajes == []
+
+    telegram_avisos.publicar_avisos(
+        engine, _FakeClient(), now=NOW_MADRUGADA
+    )  # confirma, a las 3 AM
+    mensajes = [t for chat, t in enviados if chat == "555"]
+    assert len(mensajes) == 1
+    assert "superó" in mensajes[0]
 
 
 # --- B1/B2/B4: umbral propio ---------------------------------------------------
