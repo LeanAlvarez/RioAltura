@@ -5,6 +5,7 @@ import { getEstadisticas } from "../api/estadisticas";
 import type { AlturaDiaria, Evento, RangoAlerta } from "../api/types";
 import { formatDiaSemanaFecha, formatMetros, parseFechaLocal } from "../format";
 import { PALETA, TRAZOS, leerVariableCss } from "../graficos/paleta";
+import { crearTooltipGrafico } from "../graficos/tooltip";
 import { onTemaCambia } from "../theme";
 
 /**
@@ -30,6 +31,25 @@ export function calcularRangoHistorico(hoy: Date, diasMax: number = DIAS_HISTORI
 
 function fechaAEpochSegundos(fechaIso: string): number {
   return Math.floor(parseFechaLocal(fechaIso).getTime() / 1000);
+}
+
+const tooltipFechaFormatter = new Intl.DateTimeFormat("es-AR", {
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
+/**
+ * Pure (spec 019 D2): qué dice el tooltip en el día `idx`. En un gráfico que
+ * abarca años, sin esto se ve que hubo una crecida grande y no se puede leer
+ * a cuánto llegó ni cuándo fue.
+ */
+export function contenidoTooltipHistorial(series: HistorialSeries, idx: number): string | null {
+  const x = series.x[idx];
+  const altura = series.real[idx];
+  if (x === undefined || altura === undefined) return null;
+  const fecha = tooltipFechaFormatter.format(new Date(x * 1000));
+  return `<strong>${fecha}</strong><div>${formatMetros(altura)}</div>`;
 }
 
 export interface HistorialSeries {
@@ -177,7 +197,10 @@ export function mountHistorial(container: HTMLElement, deps: HistorialDeps = def
   container.innerHTML = `
     <h2>Historial completo</h2>
     <p class="card-subtitulo">Todos los datos de altura real cargados hasta hoy, con las crecidas de referencia marcadas.</p>
-    <div class="grafico-canvas" id="historial-canvas"></div>
+    <div class="grafico-canvas-wrap">
+      <div class="grafico-canvas" id="historial-canvas"></div>
+      <div class="grafico-tooltip" id="historial-tooltip" hidden></div>
+    </div>
     <ul class="grafico-leyenda" aria-hidden="true">
       <li><span class="historial-leyenda-muestra historial-leyenda-muestra--banda"></span> Las franjas marcan los días en que hubo alerta</li>
       <li><span class="historial-leyenda-muestra historial-leyenda-muestra--punto"></span> Los puntos son las crecidas grandes</li>
@@ -194,7 +217,15 @@ export function mountHistorial(container: HTMLElement, deps: HistorialDeps = def
   const estadoEl = container.querySelector<HTMLParagraphElement>(".grafico-estado");
   const eventosEl = container.querySelector<HTMLUListElement>("#historial-eventos");
   const resumenEl = container.querySelector<HTMLParagraphElement>(".grafico-resumen");
-  if (!canvasEl || !estadoEl || !eventosEl || !resumenEl) return { destroy(): void {} };
+  const wrapEl = container.querySelector<HTMLDivElement>(".grafico-canvas-wrap");
+  const tooltipEl = container.querySelector<HTMLDivElement>("#historial-tooltip");
+  if (!canvasEl || !estadoEl || !eventosEl || !resumenEl || !wrapEl || !tooltipEl) {
+    return { destroy(): void {} };
+  }
+
+  const tooltip = crearTooltipGrafico(wrapEl, tooltipEl, (idx) =>
+    ultimaSeries ? contenidoTooltipHistorial(ultimaSeries, idx) : null,
+  );
 
   /** (Re)dibuja a partir de los datos ya cargados, releyendo la paleta en cada llamada (reactividad al tema). */
   function dibujar(series: HistorialSeries, rangos: RangoSombreado[], puntos: EventoPunto[]): void {
@@ -205,6 +236,7 @@ export function mountHistorial(container: HTMLElement, deps: HistorialDeps = def
     const colorGrilla = leerVariableCss("--graf-grilla", PALETA.light.grilla, container);
 
     instancia?.destroy();
+    tooltip.ocultar();
     canvasEl.replaceChildren();
     const width = Math.max(280, canvasEl.clientWidth || container.clientWidth || 320);
     instancia = new uPlot(
@@ -239,6 +271,7 @@ export function mountHistorial(container: HTMLElement, deps: HistorialDeps = def
           },
         ],
         legend: { show: false },
+        plugins: [tooltip.plugin],
         hooks: construirHooks(rangos, puntos, colorFranja, colorReal),
       },
       [series.x, series.real],
