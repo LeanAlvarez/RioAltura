@@ -195,7 +195,10 @@ def backfill(
     Raises on the first failing window (windows already loaded stay
     loaded). Returns the total number of rows inserted.
     """
-    hasta = hasta if hasta is not None else datetime.now(UTC).date()
+    # Mismo motivo que en `actualizar_pronosticos` (spec 022): con la fecha
+    # de hoy como tope, un backfill nunca trae las emisiones del propio día
+    # en que se corre.
+    hasta = hasta if hasta is not None else tope_ventana(datetime.now(UTC))
     total_inserted = 0
     windows = _windows(desde, hasta, window_days)
 
@@ -225,6 +228,21 @@ PRONOSTICOS_FIRST_RUN_DELAY_SECONDS = 90
 _ACTUALIZAR_WINDOW_DIAS = 3
 
 
+def tope_ventana(now: datetime) -> date:
+    """Upper bound for `issuedTimeEnd` that actually includes today (spec 022).
+
+    Google reads a bare date as midnight at its start, so passing today's
+    date excludes every issuance made DURING today. The job kept reporting
+    success -- it fetched rows and inserted none -- while production sat on
+    a forecast up to 24 h old.
+
+    Proven against the live API by changing a single character:
+        issuedTimeEnd=2026-09-23  ->  last issuance 2026-09-22T23:43Z
+        issuedTimeEnd=2026-09-24  ->  last issuance 2026-09-23T22:27Z
+    """
+    return now.date() + timedelta(days=1)
+
+
 def actualizar_pronosticos(
     engine: Engine, client: httpx.Client, now: datetime | None = None
 ) -> dict:
@@ -236,8 +254,8 @@ def actualizar_pronosticos(
     Returns a summary dict `{fetched, inserted}`.
     """
     now = now if now is not None else datetime.now(UTC)
-    hasta = now.date()
-    desde = hasta - timedelta(days=_ACTUALIZAR_WINDOW_DIAS)
+    hasta = tope_ventana(now)
+    desde = now.date() - timedelta(days=_ACTUALIZAR_WINDOW_DIAS)
 
     try:
         rows = fetch_forecasts(client, GAUGES, desde, hasta)

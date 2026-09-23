@@ -1,7 +1,7 @@
 import json
 import logging
 from collections.abc import Iterator
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -269,3 +269,58 @@ def test_backfill_cli_help_no_falla() -> None:
 def test_build_client_disponible_para_el_cli() -> None:
     client = build_client()
     client.close()
+
+
+# --- Spec 022: la ventana tiene que incluir el día en curso -------------
+
+
+def test_la_ventana_periodica_incluye_todo_el_dia_de_hoy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """El defecto era un borde mal calculado, así que se miran los PARÁMETROS.
+
+    Comprobar "trajo filas" no detectaba nada: el job traía 64 filas y
+    insertaba 0, informando éxito, mientras producción se quedaba con un
+    pronóstico de hasta 24 h de atraso.
+    """
+    llamadas: list[tuple[date, date]] = []
+
+    def _fake_fetch(client, gauge_ids, desde, hasta):  # noqa: ANN001 - test double
+        llamadas.append((desde, hasta))
+        return []
+
+    monkeypatch.setattr(google, "fetch_forecasts", _fake_fetch)
+    monkeypatch.setattr(google, "upsert_pronosticos", lambda engine, rows: 0)
+
+    ahora = datetime(2026, 9, 23, 22, 21, tzinfo=UTC)
+    google.actualizar_pronosticos(engine=None, client=None, now=ahora)
+
+    (desde, hasta) = llamadas[0]
+    # Google lee una fecha pelada como su medianoche: con "2026-09-23" como
+    # tope, todo lo emitido durante el 23 queda afuera.
+    assert hasta > ahora.date(), "el tope debe pasar el día en curso, no cortarlo al empezar"
+    assert desde == date(2026, 9, 20)
+
+
+def test_el_backfill_tambien_llega_hasta_hoy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Sin esto, un backfill nunca trae las emisiones del día en que se corre."""
+    llamadas: list[tuple[date, date]] = []
+
+    def _fake_fetch(client, gauge_ids, desde, hasta):  # noqa: ANN001 - test double
+        llamadas.append((desde, hasta))
+        return []
+
+    monkeypatch.setattr(google, "fetch_forecasts", _fake_fetch)
+    monkeypatch.setattr(google, "upsert_pronosticos", lambda engine, rows: 0)
+
+    hoy = datetime.now(UTC).date()
+    google.backfill(engine=None, client=None, desde=hoy - timedelta(days=2), sleep=lambda _s: None)
+
+    ultimo_tope = max(hasta for _desde, hasta in llamadas)
+    assert ultimo_tope > hoy
+
+
+def test_tope_ventana_es_el_dia_siguiente() -> None:
+    assert google.tope_ventana(datetime(2026, 9, 23, 22, 21, tzinfo=UTC)) == date(2026, 9, 24)
+    # También en el borde de medianoche.
+    assert google.tope_ventana(datetime(2026, 9, 23, 0, 0, tzinfo=UTC)) == date(2026, 9, 24)
