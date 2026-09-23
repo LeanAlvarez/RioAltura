@@ -29,7 +29,10 @@ const MARGEN_ESCALA_M = 0.5;
  * Con una sola línea corta ("7,90 m") alcanza una separación chica, y las
  * etiquetas quedan pegadas a su marca en vez de desplazadas.
  */
-const SEPARACION_MIN_ETIQUETA_PCT = 7;
+// Con la regla como protagonista (spec 018) hay más alto disponible, pero
+// 6,80 y 7,10 siguen separados por sólo 3 % de la escala: sin este empuje sus
+// etiquetas se pisan. Subido de 7 a 9 al agrandar la regla.
+const SEPARACION_MIN_ETIQUETA_PCT = 9;
 
 /**
  * Margen (en % de alto de la regla) que ninguna etiqueta de texto puede

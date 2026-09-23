@@ -446,11 +446,49 @@ body {
   grid-area: regla;
 }
 
-/* La regla pasa de accesorio a protagonista. */
+/*
+ * La regla pasa de accesorio a protagonista, pero SIN altura fija: con un
+ * `min-height` en rem quedaba más alta que su columna de texto y dejaba un
+ * agujero abajo a la izquierda. Ahora se estira hasta la altura de la fila,
+ * así las dos columnas terminan juntas por definición.
+ */
 .card--respuesta .regla-hidrometrica {
   width: 10.5rem;
   max-width: 42vw;
-  min-height: 15rem;
+  min-height: 13rem;
+  align-self: stretch;
+}
+
+/*
+ * D2 (spec 018) — UN DÍA TRANQUILO ES UN DÍA GRIS.
+ *
+ * El color es información, no decoración. Con el río en su nivel normal la
+ * tarjeta de la respuesta está callada; a medida que sube, su borde y su
+ * filo izquierdo toman el color del riesgo. El estado se percibe ANTES de
+ * leer una palabra -- y nunca SÓLO por color: la frase, la insignia y la
+ * regla dicen lo mismo (CLAUDE.md §7).
+ */
+:root[data-estado-rio="warn"] .card--respuesta {
+  border-color: var(--warn);
+}
+:root[data-estado-rio="error"] .card--respuesta {
+  border-color: var(--error);
+}
+:root[data-estado-rio="danger"] .card--respuesta {
+  border-color: var(--danger);
+}
+
+/*
+ * El filo izquierdo sólo aparece cuando hay algo que decir: con el río
+ * normal no se dibuja nada.
+ */
+.card--respuesta {
+  border-left-width: 2px;
+}
+:root[data-estado-rio="warn"] .card--respuesta,
+:root[data-estado-rio="error"] .card--respuesta,
+:root[data-estado-rio="danger"] .card--respuesta {
+  border-left-width: 6px;
 }
 
 /* La frase es el héroe: es la que responde la pregunta que la persona trajo. */
@@ -481,9 +519,25 @@ body {
   .card--respuesta .umbral-distancia {
     font-size: 1.5rem;
   }
+  /*
+   * En pantallas anchas la regla acompaña a TODA la tarjeta, no sólo a la
+   * fila del número: hay ancho de sobra para que la frase conviva con ella,
+   * y así la regla llega de arriba abajo en vez de sobrar por debajo del
+   * texto.
+   */
+  .card--respuesta .estado-hoy-layout {
+    grid-template-areas:
+      "titulo regla"
+      "frase regla"
+      "datos regla";
+    align-content: start;
+  }
   .card--respuesta .regla-hidrometrica {
-    width: 12rem;
-    min-height: 19rem;
+    /* Ancho fijo en rem, no en %: lo que tiene que entrar es "7,90 m" en una
+       línea, y eso no depende del ancho de la tarjeta. */
+    width: 9.5rem;
+    flex: 0 0 auto;
+    min-height: 17rem;
   }
 }
 
@@ -770,6 +824,12 @@ body {
   font-size: 0.8125rem;
   line-height: 1.15;
   color: var(--fg);
+  /*
+   * Sin esto, al angostar la columna de la regla las etiquetas se parten
+   * ("7,90 / m") y dejan de leerse como una altura. Una etiqueta de eje que
+   * se corta en dos líneas ya no es una etiqueta.
+   */
+  white-space: nowrap;
 }
 
 .regla-marca-tick.regla-marca--hoy {

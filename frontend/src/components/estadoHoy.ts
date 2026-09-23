@@ -82,6 +82,11 @@ export function renderEstadoHoy(container: HTMLElement, view: EstadoHoyView): vo
     return;
   }
 
+  // D2 (spec 018): el color es información, no decoración. La página entera
+  // lee este atributo: con el río normal se queda callada, y recién cuando
+  // sube entra el color. Así el estado se percibe antes de leer nada.
+  container.ownerDocument.documentElement.dataset.estadoRio = view.estadoTono;
+
   container.innerHTML = `
     <div class="estado-hoy-layout">
       <h2>${TITULO}</h2>

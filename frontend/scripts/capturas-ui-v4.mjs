@@ -32,6 +32,37 @@ for (const [w, h] of [[360, 780], [390, 844], [768, 1000], [1280, 900]]) {
     await p.close();
   }
 }
+// --- D2: un día tranquilo es un día gris --------------------------------
+// Se fuerza cada estado en el atributo que escribe `estadoHoy.ts`, en vez de
+// esperar una crecida real: lo que se verifica es el contrato del CSS.
+{
+  const p = await b.newPage({ viewport: { width: 1280, height: 900 } });
+  await p.goto(URL, { waitUntil: "domcontentloaded" });
+  await p.waitForTimeout(5000);
+  const borde = async (estado) =>
+    p.evaluate((e) => {
+      document.documentElement.dataset.estadoRio = e;
+      const c = document.querySelector(".card--respuesta");
+      const s = getComputedStyle(c);
+      return { color: s.borderLeftColor, ancho: s.borderLeftWidth };
+    }, estado);
+
+  const normal = await borde("ok");
+  console.log(`\nD2  río normal   -> borde ${normal.color} ${normal.ancho}`);
+  let previo = normal.color;
+  let ok = true;
+  for (const estado of ["warn", "error", "danger"]) {
+    const b2 = await borde(estado);
+    console.log(`D2  río ${estado.padEnd(9)} -> borde ${b2.color} ${b2.ancho}`);
+    if (b2.color === previo) { console.log(`  ✗ ${estado} no cambió el color`); ok = false; }
+    if (parseFloat(b2.ancho) <= parseFloat(normal.ancho)) { console.log(`  ✗ ${estado} no engrosó el filo`); ok = false; }
+    previo = b2.color;
+  }
+  if (!ok) fallo = true;
+  else console.log("D2  el color entra sólo cuando hay algo que decir.");
+  await p.close();
+}
+
 await b.close();
 console.log(fallo ? "\nHAY FALLAS" : "\nSin overflow, contexto plegado y tipografía propia en los 8 casos.");
 process.exit(fallo ? 1 : 0);
