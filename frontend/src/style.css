@@ -1,4 +1,30 @@
 /*
+ * Tipografía (spec 018 D3): Atkinson Hyperlegible, del Braille Institute,
+ * diseñada para visión disminuida -- letras y números inconfundibles. Los
+ * usuarios de esta app son vecinos mayores mirando un celular en una
+ * emergencia, así que esto es función, no gusto.
+ *
+ * AUTO-HOSPEDADA, no por CDN: Google Fonts vería la IP de cada vecino y
+ * CLAUDE.md §9 prohíbe terceros. Pesan 24 kB las dos variantes (subset
+ * latin), y con `font-display: swap` el texto se pinta desde el primer
+ * frame con la tipografía del sistema.
+ */
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fuentes/atkinson-hyperlegible-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Atkinson Hyperlegible";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/fuentes/atkinson-hyperlegible-700.woff2") format("woff2");
+}
+
+/*
  * Tema claro/oscuro (spec 008, T1-T3): todos los colores viven acá, como
  * tokens CSS. Por defecto sigue `prefers-color-scheme` (bloque de abajo);
  * `[data-theme="light"]`/`[data-theme="dark"]` en <html> es la elección
@@ -25,7 +51,14 @@
   --agua-2: #3182bd;
   --agua-3: #08519c;
   --aviso: #a35d00;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /*
+   * Numerales tabulares en TODA la app: sin esto la altura del río cambia de
+   * ancho al pasar de 4,03 a 4,11 y el número "salta" en cada actualización.
+   * En una pantalla que alguien mira esperando un cambio, ese salto se lee
+   * como si hubiera pasado algo.
+   */
+  font-variant-numeric: tabular-nums;
   color: var(--fg);
   background: var(--bg);
 }
@@ -204,19 +237,12 @@ body {
   grid-template-areas:
     "hoy"
     "proximos"
+    "umbrales"
     "mapa"
     "mapa-disclaimer"
     "mi-casa"
-    "superficie"
-    "grafico"
-    "umbrales"
-    "aguas-arriba"
-    "contexto"
-    "salto-grande"
-    "historial"
-    "precision"
-    "faq"
-    "detalle";
+    "telegram"
+    "contexto-nivel";
   align-items: stretch;
   gap: 0.75rem;
   padding: 0.75rem;
@@ -239,17 +265,11 @@ body {
     padding: 1.25rem;
     grid-template-areas:
       "hoy proximos"
-      "umbrales umbrales"
+      "hoy umbrales"
       "mapa mapa"
       "mapa-disclaimer mapa-disclaimer"
-      "mi-casa mi-casa"
-      "superficie superficie"
-      "grafico aguas-arriba"
-      "grafico contexto"
-      "salto-grande salto-grande"
-      "historial precision"
-      "faq faq"
-      "detalle detalle";
+      "mi-casa telegram"
+      "contexto-nivel contexto-nivel";
   }
 }
 
@@ -272,19 +292,82 @@ body {
       "hoy proximos umbrales"
       "mapa mapa mapa"
       "mapa-disclaimer mapa-disclaimer mapa-disclaimer"
-      "mi-casa mi-casa mi-casa"
-      "superficie superficie superficie"
-      "grafico grafico aguas-arriba"
-      "grafico grafico contexto"
-      "salto-grande salto-grande salto-grande"
-      "historial historial precision"
-      "faq faq faq"
-      "detalle detalle detalle";
+      "mi-casa mi-casa telegram"
+      "contexto-nivel contexto-nivel contexto-nivel";
   }
 }
 
 #tarjeta-hoy {
   grid-area: hoy;
+}
+#tarjeta-telegram {
+  grid-area: telegram;
+}
+
+/*
+ * NIVEL 3 (spec 018 D4). Ocupa la fila entera en los tres breakpoints y
+ * lleva su propia grilla adentro, así las tarjetas de contexto se acomodan
+ * sin depender de las áreas del nivel 1 y 2.
+ */
+.contexto-nivel {
+  grid-area: contexto-nivel;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card-bg);
+}
+
+.contexto-nivel-titulo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--fg);
+  min-height: 44px;
+}
+
+.contexto-nivel-titulo:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* La aclaración de qué hay adentro, para que abrirlo no sea una apuesta. */
+.contexto-nivel-detalle {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.contexto-nivel-grilla {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
+  padding: 0 0.75rem 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .contexto-nivel-grilla {
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    padding: 0 1rem 1rem;
+  }
+  /* Los dos gráficos grandes piden fila entera para ser legibles. */
+  .contexto-nivel-grilla > .card--grafico,
+  .contexto-nivel-grilla > .card--faq,
+  .contexto-nivel-grilla > .card--detalle {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 1280px) {
+  .contexto-nivel-grilla {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .contexto-nivel-grilla > .card--grafico {
+    grid-column: span 2;
+  }
 }
 #tarjeta-proximos {
   grid-area: proximos;
@@ -292,38 +375,11 @@ body {
 #tarjeta-umbrales {
   grid-area: umbrales;
 }
-#tarjeta-grafico {
-  grid-area: grafico;
-}
 #tarjeta-mapa {
   grid-area: mapa;
 }
 #tarjeta-mi-casa {
   grid-area: mi-casa;
-}
-#tarjeta-superficie {
-  grid-area: superficie;
-}
-#tarjeta-aguas-arriba {
-  grid-area: aguas-arriba;
-}
-#tarjeta-contexto {
-  grid-area: contexto;
-}
-#tarjeta-salto-grande {
-  grid-area: salto-grande;
-}
-#tarjeta-historial {
-  grid-area: historial;
-}
-#tarjeta-precision {
-  grid-area: precision;
-}
-#faq {
-  grid-area: faq;
-}
-#tarjeta-detalle {
-  grid-area: detalle;
 }
 
 .disclaimer-corta--mapa {
@@ -340,12 +396,149 @@ body {
   padding: 1rem;
 }
 
+/*
+ * Sin VERSALES espaciadas (spec 018): una etiqueta en mayúsculas arriba de
+ * cada título es puro cromo de plantilla -- no aporta información y se lee
+ * peor, justo lo contrario de lo que necesita esta app.
+ */
 .card h2 {
   margin: 0 0 0.5rem;
   font-size: 1rem;
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+}
+
+/*
+ * NIVEL 1 — LA RESPUESTA (spec 018 D4). El héroe es el hidrómetro leído en
+ * vertical: es el objeto más característico del mundo de este tema, la regla
+ * del muelle que la gente de Colón ya sabe leer. No un número grande en una
+ * tarjeta, que es el tratamiento por defecto de cualquier dashboard.
+ */
+.card--respuesta {
+  border-width: 2px;
+}
+
+/*
+ * La frase ocupa la fila entera; el número y la regla se reparten la de
+ * abajo. Compartiendo ancho con la regla, a 360 px la frase caía en siete
+ * líneas de dos palabras y dejaba de leerse de un vistazo.
+ */
+.card--respuesta .estado-hoy-layout {
+  gap: 0.5rem 1rem;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "titulo titulo"
+    "frase frase"
+    "datos regla";
+  align-items: start;
+}
+
+.card--respuesta .estado-hoy-layout > h2 {
+  grid-area: titulo;
+}
+.card--respuesta .umbral-distancia {
+  grid-area: frase;
+}
+.estado-hoy-datos {
+  grid-area: datos;
+}
+.card--respuesta .regla-hidrometrica {
+  grid-area: regla;
+}
+
+/*
+ * La regla pasa de accesorio a protagonista, pero SIN altura fija: con un
+ * `min-height` en rem quedaba más alta que su columna de texto y dejaba un
+ * agujero abajo a la izquierda. Ahora se estira hasta la altura de la fila,
+ * así las dos columnas terminan juntas por definición.
+ */
+.card--respuesta .regla-hidrometrica {
+  width: 10.5rem;
+  max-width: 42vw;
+  min-height: 13rem;
+  align-self: stretch;
+}
+
+/*
+ * D2 (spec 018) — UN DÍA TRANQUILO ES UN DÍA GRIS.
+ *
+ * El color es información, no decoración. Con el río en su nivel normal la
+ * tarjeta de la respuesta está callada; a medida que sube, su borde y su
+ * filo izquierdo toman el color del riesgo. El estado se percibe ANTES de
+ * leer una palabra -- y nunca SÓLO por color: la frase, la insignia y la
+ * regla dicen lo mismo (CLAUDE.md §7).
+ */
+:root[data-estado-rio="warn"] .card--respuesta {
+  border-color: var(--warn);
+}
+:root[data-estado-rio="error"] .card--respuesta {
+  border-color: var(--error);
+}
+:root[data-estado-rio="danger"] .card--respuesta {
+  border-color: var(--danger);
+}
+
+/*
+ * El filo izquierdo sólo aparece cuando hay algo que decir: con el río
+ * normal no se dibuja nada.
+ */
+.card--respuesta {
+  border-left-width: 2px;
+}
+:root[data-estado-rio="warn"] .card--respuesta,
+:root[data-estado-rio="error"] .card--respuesta,
+:root[data-estado-rio="danger"] .card--respuesta {
+  border-left-width: 6px;
+}
+
+/* La frase es el héroe: es la que responde la pregunta que la persona trajo. */
+.card--respuesta .umbral-distancia {
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem;
+  line-height: 1.35;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+/* El número acompaña, en la misma línea que su estado. */
+.altura-linea {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem;
+}
+
+.card--respuesta .altura-actual {
+  font-size: 1.75rem;
+  line-height: 1;
+  margin: 0;
+}
+
+@media (min-width: 768px) {
+  .card--respuesta .umbral-distancia {
+    font-size: 1.5rem;
+  }
+  /*
+   * En pantallas anchas la regla acompaña a TODA la tarjeta, no sólo a la
+   * fila del número: hay ancho de sobra para que la frase conviva con ella,
+   * y así la regla llega de arriba abajo en vez de sobrar por debajo del
+   * texto.
+   */
+  .card--respuesta .estado-hoy-layout {
+    grid-template-areas:
+      "titulo regla"
+      "frase regla"
+      "datos regla";
+    align-content: start;
+  }
+  .card--respuesta .regla-hidrometrica {
+    /* Ancho fijo en rem, no en %: lo que tiene que entrar es "7,90 m" en una
+       línea, y eso no depende del ancho de la tarjeta. */
+    width: 9.5rem;
+    flex: 0 0 auto;
+    min-height: 17rem;
+  }
 }
 
 .card-error {
@@ -631,6 +824,12 @@ body {
   font-size: 0.8125rem;
   line-height: 1.15;
   color: var(--fg);
+  /*
+   * Sin esto, al angostar la columna de la regla las etiquetas se parten
+   * ("7,90 / m") y dejan de leerse como una altura. Una etiqueta de eje que
+   * se corta en dos líneas ya no es una etiqueta.
+   */
+  white-space: nowrap;
 }
 
 .regla-marca-tick.regla-marca--hoy {
