@@ -424,3 +424,76 @@ def test_umbrales_propios_no_dependen_del_canal_configurado(
 
     mensajes = [t for chat, t in enviados if chat == "555"]
     assert len(mensajes) == 1
+
+
+# --- Spec 021: el interruptor no puede callar una respuesta ---------------
+
+
+def test_respuesta_sale_con_publicacion_apagada(
+    monkeypatch: pytest.MonkeyPatch, engine: Engine, enviados: list
+) -> None:
+    """S4 frena lo que el bot manda solo, no lo que contesta.
+
+    Sin esto, apagar el interruptor deja sin respuesta a quien le escribe al
+    bot -- y su umbral SÍ queda guardado, así que el silencio de "guardado"
+    es idéntico al de "roto". Y para probar el bot había que encender las
+    publicaciones: asumir el riesgo justamente para verificar sin riesgo.
+    """
+    monkeypatch.setenv("TELEGRAM_PUBLICACION_ACTIVA", "false")
+    get_settings.cache_clear()
+
+    resultado = telegram_avisos.enviar_mensaje_seguro(
+        engine, _FakeClient(), 123, "Listo, te aviso", NOW, es_respuesta=True
+    )
+
+    assert resultado is not None
+    assert [texto for _, texto in enviados] == ["Listo, te aviso"]
+
+
+def test_publicacion_sigue_frenada_con_el_interruptor_apagado(
+    monkeypatch: pytest.MonkeyPatch, engine: Engine, enviados: list
+) -> None:
+    """La otra mitad: el interruptor tiene que seguir sirviendo para lo suyo."""
+    monkeypatch.setenv("TELEGRAM_PUBLICACION_ACTIVA", "false")
+    get_settings.cache_clear()
+
+    resultado = telegram_avisos.enviar_mensaje_seguro(
+        engine, _FakeClient(), 123, "El río subió", NOW
+    )
+
+    assert resultado is None
+    assert enviados == []
+
+
+def test_una_respuesta_tambien_consume_cupo_diario(
+    monkeypatch: pytest.MonkeyPatch, engine: Engine, enviados: list
+) -> None:
+    """Una ráfaga de comandos no puede vaciarle el presupuesto al canal."""
+    monkeypatch.setenv("TELEGRAM_PUBLICACION_ACTIVA", "false")
+    monkeypatch.setenv("TELEGRAM_TOPE_MENSAJES_DIA", "1")
+    get_settings.cache_clear()
+
+    primera = telegram_avisos.enviar_mensaje_seguro(
+        engine, _FakeClient(), 123, "una", NOW, es_respuesta=True
+    )
+    segunda = telegram_avisos.enviar_mensaje_seguro(
+        engine, _FakeClient(), 123, "dos", NOW, es_respuesta=True
+    )
+
+    assert primera is not None
+    assert segunda is None
+    assert [texto for _, texto in enviados] == ["una"]
+
+
+def test_sin_token_tampoco_responde(
+    monkeypatch: pytest.MonkeyPatch, engine: Engine, enviados: list
+) -> None:
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "")
+    get_settings.cache_clear()
+
+    resultado = telegram_avisos.enviar_mensaje_seguro(
+        engine, _FakeClient(), 123, "hola", NOW, es_respuesta=True
+    )
+
+    assert resultado is None
+    assert enviados == []

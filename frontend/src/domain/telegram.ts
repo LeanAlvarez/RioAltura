@@ -37,3 +37,31 @@ export function buildTelegramCanalUrl(): string {
 export function umbralValido(umbralM: number): boolean {
   return Number.isFinite(umbralM) && umbralM >= UMBRAL_MIN_M && umbralM <= UMBRAL_MAX_M;
 }
+
+/**
+ * Pure: por qué ese texto no sirve como umbral, dicho de forma que se
+ * entienda qué hacer.
+ *
+ * "Ingresá una altura entre 0.01 y 15" no le dice nada a alguien que acaba
+ * de escribir "712" queriendo decir 7,12 -- que es exactamente lo que pasa
+ * en un celular cuando el teclado no ofrece la coma.
+ */
+export function mensajeUmbralInvalido(crudo: string): string {
+  const texto = crudo.trim();
+  if (texto === "") return "Escribí la altura del río a la que querés que te avisemos. Ej: 7,12";
+
+  const numero = Number(texto.replace(",", "."));
+  if (!Number.isFinite(numero)) {
+    return `"${texto}" no es un número. Escribí la altura en metros, ej: 7,12`;
+  }
+  if (numero > UMBRAL_MAX_M) {
+    // El caso real: sin coma en el teclado, 7,12 se escribe "712".
+    const conComa = texto.replace(/[.,]/g, "");
+    const sugerencia =
+      conComa.length >= 3 && /^\d+$/.test(conComa)
+        ? ` ¿Quisiste decir ${conComa.slice(0, -2)},${conComa.slice(-2)}?`
+        : "";
+    return `El río nunca llegó a ${texto} m. Poné una altura de hasta ${String(UMBRAL_MAX_M)} m.${sugerencia}`;
+  }
+  return `Poné una altura entre ${String(UMBRAL_MIN_M)} y ${String(UMBRAL_MAX_M)} metros. Ej: 7,12`;
+}
