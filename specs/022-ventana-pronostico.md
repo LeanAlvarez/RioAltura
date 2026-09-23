@@ -20,7 +20,7 @@ Del log del worker en el VPS:
 Causa, en dos líneas de `worker/jobs/google.py`:
 
 ```python
-hasta = now.date()          # -> viaja como "2026-09-23"
+hasta = now.date()  # -> viaja como "2026-09-23"
 desde = hasta - timedelta(days=_ACTUALIZAR_WINDOW_DIAS)
 ```
 
