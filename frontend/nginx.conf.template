@@ -1,8 +1,37 @@
+# D2 (spec 016): `.geojson` no existe en el mime.types de nginx (sólo
+# "application/json json"), así que sin esto se sirve como octet-stream y
+# ninguna regla de gzip lo alcanza.
+types {
+    application/geo+json geojson;
+}
+
 server {
     listen 80;
     server_name _;
     root /usr/share/nginx/html;
     index index.html;
+
+    # D2: el nginx de stock trae `#gzip on;` COMENTADO. Las 44 capas pesan
+    # 18 MB en disco y ~3,5 MB comprimidas: sin esto un vecino en 3G se baja
+    # las 18. CLAUDE.md §7 diseña para 360 px y 3G, así que esto no es una
+    # optimización, es el requisito.
+    gzip on;
+    gzip_vary on;
+    gzip_proxied any;
+    # Las capas son JSON plano y comprimen muchísimo; 6 es el equilibrio
+    # habitual entre CPU del servidor y bytes que viajan.
+    gzip_comp_level 6;
+    # Por debajo de ~1 kB comprimir cuesta más de lo que ahorra.
+    gzip_min_length 1024;
+    gzip_types
+        application/geo+json
+        application/javascript
+        application/json
+        application/manifest+json
+        image/svg+xml
+        text/css
+        text/javascript
+        text/plain;
 
     # Same-origin API: /api/health -> http://api:8000/health
     location /api/ {
@@ -10,6 +39,27 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_read_timeout 10s;
+    }
+
+    # Las capas no cambian nunca sin un redeploy (se versionan en el repo y
+    # las regenera un script offline), así que se pueden cachear fuerte: el
+    # vecino que vuelve al día siguiente no se las baja de nuevo.
+    location /capas/ {
+        expires 30d;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # Vite les pone hash en el nombre, así que el contenido de un archivo
+    # dado nunca cambia.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # El HTML sí tiene que revalidarse siempre: es lo que apunta a los
+    # assets nuevos después de un deploy.
+    location = /index.html {
+        add_header Cache-Control "no-cache";
     }
 
     location / {

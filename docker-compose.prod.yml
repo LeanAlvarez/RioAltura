@@ -1,0 +1,117 @@
+# Compose de PRODUCCIÓN (spec 016). Es el que usa Dokploy en el VPS.
+#
+# Deliberadamente separado de docker-compose.yml y no un juego de variables
+# sobre el mismo archivo: el de desarrollo lo leen agentes trabajando en
+# paralelo en sus worktrees (CLAUDE.md §2), y un compose que hace dos cosas
+# distintas según una variable es justo donde se cuela el error que deja la
+# base abierta. Dos archivos, cada uno evidente a la lectura.
+#
+# D3: NINGÚN servicio publica puertos al host salvo `web`. En un VPS,
+# publicar el puerto de Postgres lo expone a internet -- y Docker escribe sus
+# propias reglas de iptables, así que tener `ufw` cerrado NO alcanza. `api` y
+# `db` se hablan por la red interna del compose y no existen desde afuera.
+#
+# Traefik (el proxy de Dokploy) enruta el subdominio al servicio `web`.
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?falta POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?falta POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      POSTGRES_USER: ${POSTGRES_USER:?falta POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?falta POSTGRES_DB}
+      DB_HOST: db
+      DB_PORT: "5432"
+    depends_on:
+      db:
+        condition: service_healthy
+    # D4: /health chequea también la base, así que un "healthy" acá significa
+    # que la API puede responder de verdad, no sólo que el proceso existe.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import urllib.request,sys;
+          sys.exit(0 if b'\"db\":\"ok\"' in urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read() else 1)"
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      # Generoso a propósito: el primer arranque corre las migraciones (D1).
+      start_period: 90s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    environment:
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      POSTGRES_USER: ${POSTGRES_USER:?falta POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?falta POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?falta POSTGRES_DB}
+      DB_HOST: db
+      DB_PORT: "5432"
+      # Solo el worker recibe la API key de Google. Nunca la API ni la web.
+      FLOODS_API_KEY: ${FLOODS_API_KEY:?falta FLOODS_API_KEY}
+      # Telegram (spec 011): solo el worker, igual tratamiento que la key.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CANAL_ID: ${TELEGRAM_CANAL_ID:-}
+      TELEGRAM_PUBLICACION_ACTIVA: ${TELEGRAM_PUBLICACION_ACTIVA:-true}
+      TELEGRAM_TOPE_MENSAJES_DIA: ${TELEGRAM_TOPE_MENSAJES_DIA:-100}
+      # El link que va al pie de cada mensaje del canal: acá es donde entra
+      # el subdominio de producción (https://...). Vacío = mensajes sin link.
+      TELEGRAM_APP_URL: ${TELEGRAM_APP_URL:-}
+      TELEGRAM_HORA_ESTADO_DIARIO: ${TELEGRAM_HORA_ESTADO_DIARIO:-8}
+      TELEGRAM_VENTANA_DIURNA_INICIO_HORA: ${TELEGRAM_VENTANA_DIURNA_INICIO_HORA:-8}
+      TELEGRAM_VENTANA_DIURNA_FIN_HORA: ${TELEGRAM_VENTANA_DIURNA_FIN_HORA:-21}
+    depends_on:
+      # Espera a que la API esté sana, que es lo mismo que decir: espera a
+      # que las migraciones (D1) hayan terminado. El worker nunca migra.
+      api:
+        condition: service_healthy
+    stop_grace_period: 15s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: frontend
+      args:
+        # Vacío = mismo origen bajo /api, que nginx proxea a la API por la
+        # red interna. Así el navegador habla con un solo dominio y no hay
+        # CORS ni un segundo certificado.
+        VITE_API_URL: ""
+    environment:
+      API_UPSTREAM: api:8000
+    # El ÚNICO puerto publicado. Dokploy/Traefik enruta acá el subdominio.
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/ || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
