@@ -4,10 +4,15 @@ import {
   CONTRASTE_MIN_TEXTO,
   PALETA,
   ROLES_LINEA,
+  ROLES_SERIE,
   ROLES_TEXTO,
+  SEPARACION_MIN_SERIES,
+  TRAZOS,
+  esMatizDeRiesgo,
   fondoTrazoCss,
   generarCssPaleta,
   ratioContraste,
+  separacionOklab,
 } from "./paleta";
 import type { Tema } from "../theme";
 
@@ -88,5 +93,53 @@ describe("fondoTrazoCss", () => {
   it("arma un repeating-linear-gradient con los segmentos del patrón cuando hay dash", () => {
     const css = fondoTrazoCss("#0F6E56", { widthPx: 2, dash: [8, 4] });
     expect(css).toBe("repeating-linear-gradient(to right, #0F6E56 0px 8px, transparent 8px 12px)");
+  });
+});
+
+// --- Separación entre series y reserva del cálido (spec 018 D1) ---------
+
+describe("separación entre series", () => {
+  // El defecto de la v3: el contraste WCAG (contra el fondo) seguía en verde
+  // mientras el pronóstico y la medición quedaban a ΔE 13,6 en tema oscuro.
+  // Ese test medía la pregunta equivocada.
+  it.each(TEMAS)("medición y pronóstico se distinguen entre sí en tema %s", (tema) => {
+    const p = PALETA[tema];
+    const separacion = separacionOklab(p.alturaReal, p.pronostico);
+    expect(separacion).toBeGreaterThanOrEqual(SEPARACION_MIN_SERIES);
+  });
+
+  it("la separación medida es holgada, no apenas suficiente", () => {
+    // Números reales del validador de `dataviz` al elegir esta paleta.
+    expect(separacionOklab(PALETA.light.alturaReal, PALETA.light.pronostico)).toBeGreaterThan(20);
+    expect(separacionOklab(PALETA.dark.alturaReal, PALETA.dark.pronostico)).toBeGreaterThan(20);
+  });
+
+  it.each(TEMAS)(
+    "en %s, 'lo que decía el pronóstico' comparte color con el pronóstico: se distingue por trazo",
+    (tema) => {
+      // No es otra entidad, es el mismo pronóstico visto desde antes. Un hue
+      // propio afirmaba una diferencia que el dato no tiene.
+      expect(PALETA[tema].historico).toBe(PALETA[tema].pronostico);
+      expect(TRAZOS.historico.dash).toBeDefined();
+      expect(TRAZOS.historico.dash).not.toEqual(TRAZOS.pronostico.dash);
+    },
+  );
+});
+
+describe("el cálido pertenece al peligro", () => {
+  it.each(TEMAS)("en %s, ninguna serie de datos invade el vocabulario del riesgo", (tema) => {
+    for (const rol of ROLES_SERIE) {
+      const color = PALETA[tema][rol];
+      expect(
+        esMatizDeRiesgo(color),
+        `${rol} (${color}) cae en la banda de matiz reservada a los umbrales`,
+      ).toBe(false);
+    }
+  });
+
+  it.each(TEMAS)("en %s, los umbrales SÍ están en esa banda: es su vocabulario", (tema) => {
+    for (const rol of ["evacuacionPreventiva", "alerta", "evacuacion"] as const) {
+      expect(esMatizDeRiesgo(PALETA[tema][rol]), `${rol} debería ser cálido`).toBe(true);
+    }
   });
 });

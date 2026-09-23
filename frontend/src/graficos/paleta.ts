@@ -38,6 +38,76 @@ export function ratioContraste(hexA: string, hexB: string): number {
   return (claro + 0.05) / (oscuro + 0.05);
 }
 
+// --- Separación entre series (OKLab, pure, sin DOM) ---------------------
+//
+// El contraste WCAG mide un color CONTRA EL FONDO. No dice nada sobre si dos
+// series se distinguen ENTRE SÍ, que es otra pregunta -- y es la que falló en
+// la v3: el pronóstico y la medición quedaron a ΔE 13,6 en tema oscuro, o sea
+// difíciles de separar incluso con visión de color completa, mientras el test
+// de contraste seguía en verde.
+
+interface Oklab {
+  readonly L: number;
+  readonly a: number;
+  readonly b: number;
+}
+
+/** Pure: `#rrggbb` -> OKLab. Perceptualmente uniforme, a diferencia de sRGB. */
+export function aOklab(hex: string): Oklab {
+  const limpio = hex.replace("#", "");
+  const r = linealizarCanal(Number.parseInt(limpio.slice(0, 2), 16));
+  const g = linealizarCanal(Number.parseInt(limpio.slice(2, 4), 16));
+  const b = linealizarCanal(Number.parseInt(limpio.slice(4, 6), 16));
+
+  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+
+  return {
+    L: 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    a: 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    b: 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  };
+}
+
+/** Pure: distancia perceptual entre dos colores, en la escala ×100 que usa `dataviz`. */
+export function separacionOklab(hexA: string, hexB: string): number {
+  const x = aOklab(hexA);
+  const y = aOklab(hexB);
+  return Math.hypot(x.L - y.L, x.a - y.a, x.b - y.b) * 100;
+}
+
+/** Pure: ángulo de matiz OKLCH en grados [0, 360). */
+export function matizOklch(hex: string): number {
+  const { a, b } = aOklab(hex);
+  const grados = (Math.atan2(b, a) * 180) / Math.PI;
+  return grados < 0 ? grados + 360 : grados;
+}
+
+/**
+ * Piso de separación entre dos series que comparten un gráfico. Por debajo de
+ * esto cuesta distinguirlas aun con visión de color completa (criterio del
+ * validador de `dataviz`).
+ */
+export const SEPARACION_MIN_SERIES = 15;
+
+/**
+ * Banda de matiz reservada al riesgo (ámbar -> naranja -> rojo). Ninguna serie
+ * de datos puede caer acá: en esta app el cálido significa peligro, y no se
+ * presta (spec 018 D1).
+ */
+export const MATIZ_RIESGO_DESDE = 15;
+export const MATIZ_RIESGO_HASTA = 110;
+
+/** Pure: ¿este color invade el vocabulario del riesgo? */
+export function esMatizDeRiesgo(hex: string): boolean {
+  const h = matizOklch(hex);
+  return h >= MATIZ_RIESGO_DESDE && h <= MATIZ_RIESGO_HASTA;
+}
+
+/** Roles que son series de datos y comparten gráfico: deben separarse entre sí. */
+export const ROLES_SERIE: readonly RolLinea[] = ["alturaReal", "pronostico"];
+
 /** Texto de ejes y etiquetas: WCAG AA para texto normal. */
 export const CONTRASTE_MIN_TEXTO = 4.5;
 /** Líneas de datos (objetos gráficos, no texto): WCAG AA para "non-text contrast". */
@@ -89,13 +159,27 @@ function conOpacidad(hex: string, porcentajeOpacidad: number): string {
 /** `--card-bg` de style.css: no es parte de la paleta nueva, pero el test de contraste la necesita como fondo. */
 const FONDO_TARJETA: Record<Tema, string> = { light: "#ffffff", dark: "#1a2029" };
 
+// Paleta validada con el validador de la skill `dataviz` (spec 018 D1), con
+// `--pairs all` en los dos temas. NO tocar un valor sin volver a correrlo:
+// `paleta.test.ts` mide la separación, pero la validación completa (banda de
+// luminosidad, piso de croma, simulación de daltonismo) vive en esa
+// herramienta.
+//
+// Regla propia de este dominio: EL CÁLIDO PERTENECE AL PELIGRO. Ámbar,
+// naranja y rojo son de los umbrales 6,80 / 7,10 / 7,90; ninguna serie de
+// datos puede pedirlos prestados. Las series viven en frío.
 const BASE = {
   light: {
     ejeTexto: "#3D3D3D",
     grilla: "#E2E2E2",
-    alturaReal: "#0C447C",
-    pronostico: "#0F6E56",
-    historico: "#534AB7",
+    alturaReal: "#2a78d6",
+    pronostico: "#128a5f",
+    // Mismo color que `pronostico`, a propósito: "lo que decía el pronóstico"
+    // NO es otra entidad, es el mismo pronóstico visto desde antes. Se
+    // distingue por trazo (`TRAZOS.historico`), no por color. Darle un hue
+    // propio afirmaba una diferencia que el dato no tiene -- y el violeta que
+    // usaba antes daba ΔE 1,9 contra el azul en oscuro bajo protanopía.
+    historico: "#128a5f",
     evacuacionPreventiva: "#BA7517",
     alerta: "#D85A30",
     evacuacion: "#A32D2D",
@@ -104,9 +188,10 @@ const BASE = {
   dark: {
     ejeTexto: "#D0D0D0",
     grilla: "#2E3A4F",
-    alturaReal: "#85B7EB",
-    pronostico: "#5DCAA5",
-    historico: "#AFA9EC",
+    alturaReal: "#3987e5",
+    pronostico: "#199e70",
+    // Ver el comentario del tema claro.
+    historico: "#199e70",
     evacuacionPreventiva: "#EF9F27",
     alerta: "#F0997B",
     evacuacion: "#F09595",

@@ -60,11 +60,19 @@ app.innerHTML = `
     <div id="health" class="health" role="status" aria-live="polite"></div>
   </header>
   <main class="dashboard">
-    <section id="tarjeta-hoy" class="card" aria-live="polite"></section>
+    <!--
+      Tres niveles, no quince pares (spec 018 D4). Antes todas las tarjetas
+      tenían el mismo peso visual, así que la única respuesta que alguien
+      vino a buscar competía con "Cuánta tierra se tapa de agua".
+    -->
+
+    <!-- NIVEL 1 — LA RESPUESTA. Lo único que se ve sin scrollear. -->
+    <section id="tarjeta-hoy" class="card card--respuesta" aria-live="polite"></section>
     <section id="tarjeta-proximos" class="card" aria-live="polite"></section>
     <section id="tarjeta-que-hacer" class="card" aria-live="polite" hidden></section>
     <section id="tarjeta-umbrales" class="card"></section>
-    <section id="tarjeta-grafico" class="card card--grafico"></section>
+
+    <!-- NIVEL 2 — ¿LLEGA A MI CASA? Y avisame cuando cambie. -->
     <section id="tarjeta-mapa" class="card card--mapa" aria-label="Mapa de Colón"></section>
     <!--
       Fuera de la tarjeta a propósito (CLAUDE.md §7, spec 007 ítem 1): mountMapa
@@ -73,15 +81,29 @@ app.innerHTML = `
     -->
     <p class="disclaimer-corta disclaimer-corta--mapa">Orientativo. No reemplaza a Prefectura ni a Defensa Civil.</p>
     <section id="tarjeta-mi-casa" class="card" aria-live="polite"></section>
-    <section id="tarjeta-superficie" class="card"></section>
-    <section id="tarjeta-aguas-arriba" class="card" aria-live="polite"></section>
-    <section id="tarjeta-contexto" class="card" aria-live="polite"></section>
-    <section id="tarjeta-salto-grande" class="card" aria-live="polite"></section>
-    <section id="tarjeta-historial" class="card card--grafico"></section>
-    <section id="tarjeta-precision" class="card"></section>
     <section id="tarjeta-telegram" class="card"></section>
-    <section id="faq" class="card card--faq"></section>
-    <section id="tarjeta-detalle" class="card card--detalle"></section>
+
+    <!--
+      NIVEL 3 — CONTEXTO. Plegado: es para Defensa Civil, para el curioso y
+      para un día tranquilo. Un elemento details nativo, sin JS.
+    -->
+    <details class="contexto-nivel" id="contexto-nivel">
+      <summary class="contexto-nivel-titulo">
+        <span>Ver todos los datos</span>
+        <span class="contexto-nivel-detalle">evolución, historial, Salto Grande y preguntas frecuentes</span>
+      </summary>
+      <div class="contexto-nivel-grilla">
+        <section id="tarjeta-grafico" class="card card--grafico"></section>
+        <section id="tarjeta-superficie" class="card"></section>
+        <section id="tarjeta-aguas-arriba" class="card" aria-live="polite"></section>
+        <section id="tarjeta-contexto" class="card" aria-live="polite"></section>
+        <section id="tarjeta-salto-grande" class="card" aria-live="polite"></section>
+        <section id="tarjeta-historial" class="card card--grafico"></section>
+        <section id="tarjeta-precision" class="card"></section>
+        <section id="faq" class="card card--faq"></section>
+        <section id="tarjeta-detalle" class="card card--detalle"></section>
+      </div>
+    </details>
   </main>
   <footer class="footer" id="pie"></footer>
 `;
