@@ -42,8 +42,14 @@ await page.waitForSelector(".mapa-inundacion-lienzo", { timeout: 30_000 });
 await page.waitForSelector(".leaflet-overlay-pane path, .capas-error", { timeout: 30_000 }).catch(() => {});
 await page.waitForTimeout(1000);
 
+// C6: desde que el marcado es explícito, un click suelto en el mapa no hace
+// nada. Hay que encender el modo elección primero, como haría el vecino.
+await page.locator('#tarjeta-mi-casa [data-accion="marcar"]').click();
+await page.waitForTimeout(300);
+
 const antesDelClickIdx = requests.length;
 
+// Después del click al botón la página pudo scrollear: se relee el box.
 const lienzoBox = await page.locator(".mapa-inundacion-lienzo").boundingBox();
 if (!lienzoBox) {
   console.error("No se encontró el lienzo del mapa (.mapa-inundacion-lienzo)");
@@ -69,7 +75,12 @@ const puntoClickeado = await page.evaluate(
 );
 assert(puntoClickeado !== null, "el mapa expone window.mapaInundacion con un método containerPointToLatLng utilizable");
 
-await page.mouse.click(clickX, clickY);
+// `locator.click({position})` y no `page.mouse.click`: Playwright scrollea el
+// lienzo a la vista y traduce la posición, así el click no puede caer al vacío
+// (un click perdido haría pasar en verde una verificación que no probó nada).
+await page.locator(".mapa-inundacion-lienzo").click({
+  position: { x: Math.round(lienzoBox.width * 0.5), y: Math.round(lienzoBox.height * 0.4) },
+});
 
 // Espera a que "Mi casa" termine de calcular (deja de decir "Buscando…" / "Tocá el mapa").
 await page
@@ -77,7 +88,7 @@ await page
     () => {
       const el = document.querySelector(".mi-casa-resultado");
       const texto = el?.textContent ?? "";
-      return texto.length > 0 && !texto.includes("Buscando") && !texto.includes("Tocá el mapa");
+      return texto.length > 0 && !texto.includes("Buscando") && !texto.includes("Marcá tu casa");
     },
     { timeout: 20_000 },
   )
@@ -90,7 +101,11 @@ const tieneAltura = /\d,\d{2} m/.test(resultadoHtml);
 console.log("--- Resultado de la tarjeta Mi casa ---");
 console.log((await page.locator(".mi-casa-resultado").innerText()).trim());
 assert(disclaimerVisible, "el disclaimer fijo (C5) aparece junto a la respuesta");
-assert(!resultadoHtml.includes("<button"), "el disclaimer no tiene ningún botón para cerrarlo");
+// Desde C6 la tarjeta SÍ tiene botones (marcar / elegir otro / borrar). Lo
+// que la spec prohíbe es cerrar el disclaimer, así que el invariante se mide
+// sobre su propio bloque, no sobre la tarjeta entera.
+const disclaimerHtml = await page.locator(".mi-casa-disclaimer").innerHTML();
+assert(!disclaimerHtml.includes("<button"), "el disclaimer no tiene ningún botón para cerrarlo");
 
 // --- 1. La coordenada nunca viaja -------------------------------------------------
 const despuesDelClick = requests.slice(antesDelClickIdx);

@@ -419,6 +419,116 @@ body {
   color: var(--fg);
 }
 
+/*
+ * Acciones de "Mi casa" (C6). El gesto dejó de ser un click escondido en el
+ * mapa: el vecino ve qué puede hacer. 44 px de alto mínimo, que es el
+ * objetivo táctil que ya usan los botones de Telegram.
+ */
+.mi-casa-acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.mi-casa-boton {
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.9rem;
+  background: var(--card-bg);
+  color: var(--fg);
+  font-size: 0.95rem;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+/*
+ * `--card-bg` como color de texto, no `#fff`: en tema oscuro `--accent` es
+ * claro (#6fb3e0) y el blanco fijo daría un contraste malísimo. Con el token
+ * el botón invierte solo y queda legible en los dos temas.
+ */
+.mi-casa-boton-primario {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--card-bg);
+  font-weight: 600;
+}
+
+.mi-casa-boton-borrar {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.mi-casa-boton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* --- Ayuda de "Mi casa" (C7): cómo se usa, plegado y sin JS --- */
+
+.mi-casa-ayuda {
+  margin-top: 0.75rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+  font-size: 0.85rem;
+}
+
+.mi-casa-ayuda summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-weight: 600;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.mi-casa-pasos {
+  margin: 0.4rem 0 0;
+  padding-left: 1.2rem;
+  color: var(--fg);
+}
+
+.mi-casa-pasos li {
+  margin-bottom: 0.25rem;
+}
+
+.mi-casa-privacidad {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+}
+
+/*
+ * Cartel del modo elección, encima del lienzo (C6). Colores fijos, no
+ * tokens: va sobre imagen satelital, donde ni el fondo claro ni el oscuro
+ * del tema garantizan contraste. `pointer-events: none` es obligatorio --
+ * si no, se come justo el click que está esperando.
+ */
+.mi-casa-hint {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  pointer-events: none;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  background: #1c2430;
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
+}
+
+/* Leaflet pone `cursor: grab` en su propio contenedor y en las capas. */
+.eligiendo-mi-casa,
+.eligiendo-mi-casa.leaflet-grab,
+.eligiendo-mi-casa .leaflet-grab,
+.eligiendo-mi-casa .leaflet-interactive {
+  cursor: crosshair;
+}
+
 /* --- Tarjeta Hoy --- */
 
 /*

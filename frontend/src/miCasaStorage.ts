@@ -16,6 +16,7 @@ const STORAGE_KEY = "rioaltura-mi-casa";
 export interface StorageLike {
   getItem(key: string): string | null;
   setItem(key: string, value: string): void;
+  removeItem(key: string): void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -51,5 +52,18 @@ export function guardarPunto(punto: PuntoMapa, storage: StorageLike): void {
   } catch {
     // Ventana privada, cookies bloqueadas, cuota llena: el punto no
     // persiste, pero el vecino puede volver a marcarlo (C3).
+  }
+}
+
+/**
+ * Pure-ish: borra el punto guardado (C6). Nunca lanza, igual que las otras
+ * dos: si `storage` falla, la tarjeta igual vuelve a su estado inicial en
+ * esta sesión -- lo que no puede pasar es que la app se rompa al borrar.
+ */
+export function borrarPunto(storage: StorageLike): void {
+  try {
+    storage.removeItem(STORAGE_KEY);
+  } catch {
+    // Mismo caso que `guardarPunto`.
   }
 }

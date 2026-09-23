@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guardarPunto, leerPuntoGuardado, type StorageLike } from "./miCasaStorage";
+import { borrarPunto, guardarPunto, leerPuntoGuardado, type StorageLike } from "./miCasaStorage";
 
 function fakeStorage(inicial: Record<string, string> = {}): StorageLike {
   const datos = { ...inicial };
@@ -7,6 +7,9 @@ function fakeStorage(inicial: Record<string, string> = {}): StorageLike {
     getItem: (key) => datos[key] ?? null,
     setItem: (key, value) => {
       datos[key] = value;
+    },
+    removeItem: (key) => {
+      delete datos[key];
     },
   };
 }
@@ -17,6 +20,9 @@ function storageQueFalla(): StorageLike {
       throw new DOMException("blocked", "SecurityError");
     },
     setItem: () => {
+      throw new DOMException("blocked", "SecurityError");
+    },
+    removeItem: () => {
       throw new DOMException("blocked", "SecurityError");
     },
   };
@@ -60,6 +66,27 @@ describe("guardarPunto", () => {
   it("nunca lanza si el storage falla: la app sigue funcionando (C3)", () => {
     expect(() => {
       guardarPunto({ lat: -32.21, lng: -58.14 }, storageQueFalla());
+    }).not.toThrow();
+  });
+});
+
+describe("borrarPunto", () => {
+  it("borra el punto guardado (C6)", () => {
+    const storage = fakeStorage();
+    guardarPunto({ lat: -32.21, lng: -58.14 }, storage);
+    borrarPunto(storage);
+    expect(leerPuntoGuardado(storage)).toBeNull();
+  });
+
+  it("no rompe si no había nada guardado", () => {
+    expect(() => {
+      borrarPunto(fakeStorage());
+    }).not.toThrow();
+  });
+
+  it("nunca lanza si el storage falla (C3)", () => {
+    expect(() => {
+      borrarPunto(storageQueFalla());
     }).not.toThrow();
   });
 });

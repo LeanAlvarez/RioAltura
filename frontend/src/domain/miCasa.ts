@@ -105,12 +105,15 @@ export async function buscarAlturaInundacion(
 
 export type MiCasaState =
   | { kind: "sin-punto" }
+  /** El mapa está esperando el click que marca el punto (C6, modo elección). */
+  | { kind: "eligiendo" }
   | { kind: "calculando" }
   | { kind: "error" }
   | ResultadoMiCasa;
 
 export type MiCasaView =
   | { kind: "sin-punto"; mensaje: string }
+  | { kind: "eligiendo"; mensaje: string }
   | { kind: "calculando"; mensaje: string }
   | { kind: "error"; mensaje: string }
   | { kind: "fuera-de-area"; mensaje: string }
@@ -134,7 +137,12 @@ export const DISCLAIMER_MI_CASA =
 export function deriveMiCasaView(state: MiCasaState): MiCasaView {
   switch (state.kind) {
     case "sin-punto":
-      return { kind: "sin-punto", mensaje: "Tocá el mapa en tu casa (o donde quieras) para saber a qué altura del río se moja." };
+      return {
+        kind: "sin-punto",
+        mensaje: "Marcá tu casa en el mapa y te decimos a qué altura del río se moja.",
+      };
+    case "eligiendo":
+      return { kind: "eligiendo", mensaje: "Tocá tu casa en el mapa." };
     case "calculando":
       return { kind: "calculando", mensaje: "Buscando…" };
     case "error":

@@ -85,7 +85,9 @@ export interface MapaInundacion {
    * o llame a esto directamente (p. ej. al restaurar el punto guardado).
    */
   marcarMiCasa(punto: PuntoMapa): void;
-  /** Se dispara con cada click del vecino en el lienzo (spec 015, C1/C2). */
+  /** Saca el marcador de "Mi casa" del mapa (spec 015, C6). No toca `localStorage`. */
+  borrarMiCasa(): void;
+  /** Se dispara con el click que marca el punto, sólo en modo elección (spec 015, C1/C2/C6). */
   onMiCasaClick(listener: (punto: PuntoMapa) => void): () => void;
   destroy(): void;
 }
@@ -138,6 +140,22 @@ function emitirMiCasaClick(punto: PuntoMapa): void {
 function suscribirMiCasaClick(listener: (punto: PuntoMapa) => void): () => void {
   miCasaClickListeners.add(listener);
   return () => miCasaClickListeners.delete(listener);
+}
+
+// Modo elección (spec 015, C6). Antes el handler de click marcaba "Mi casa"
+// en CUALQUIER click del mapa: tocar para cerrar un popup o para mirar otra
+// zona movía la casa del vecino, sin forma de deshacerlo. Ahora el click sólo
+// marca mientras este flag está encendido, y lo enciende un botón explícito
+// de la tarjeta. El flag vive a nivel de módulo (no por instancia) por el
+// mismo motivo que la selección de altura: la tarjeta se monta antes de que
+// `createMap` haya corrido.
+const modoEleccionListeners = new Set<(activo: boolean) => void>();
+let modoEleccionActivo = false;
+
+function suscribirModoEleccion(listener: (activo: boolean) => void): () => void {
+  modoEleccionListeners.add(listener);
+  listener(modoEleccionActivo);
+  return () => modoEleccionListeners.delete(listener);
 }
 
 /** `index`/`cache` recién creados por `createMap`, para que "Mi casa" reuse la misma caché que el mapa (C2). */
@@ -366,6 +384,15 @@ export function createMap(container: HTMLElement): MapaInundacion {
   avisoModelo.addTo(map);
 
   let destroyed = false;
+  // Suscripciones y listeners globales que hay que soltar en `destroy()`.
+  const limpiezas: Array<() => void> = [];
+  // Escape cancela el modo elección (C6): la salida estándar para quien lo
+  // encendió sin querer, sin tener que encontrar el botón de cancelar.
+  function cancelarConEscape(e: KeyboardEvent): void {
+    if (e.key === "Escape") setModoEleccionMiCasa(false);
+  }
+  document.addEventListener("keydown", cancelarConEscape);
+
   let pendienteActual: MedicionActual | null = null;
   let pendientePronosticado: number | null = null;
   let pendienteSeleccion: number | null = null;
@@ -378,6 +405,7 @@ export function createMap(container: HTMLElement): MapaInundacion {
     setNivelPronosticado(h: number): void;
     seleccionar(h: number): void;
     marcarMiCasa(punto: PuntoMapa): void;
+    borrarMiCasa(): void;
   } = {
     setNivelActual(medicion) {
       pendienteActual = medicion;
@@ -390,6 +418,9 @@ export function createMap(container: HTMLElement): MapaInundacion {
     },
     marcarMiCasa(punto) {
       pendienteMiCasa = punto;
+    },
+    borrarMiCasa() {
+      pendienteMiCasa = null;
     },
   };
 
@@ -406,6 +437,13 @@ export function createMap(container: HTMLElement): MapaInundacion {
       // "Mi casa" (spec 015): un único marcador que se remarca en cada click
       // o al restaurar el punto guardado, nunca uno nuevo por click.
       let miCasaMarker: L.CircleMarker | null = null;
+      // Cartel del modo elección (C6): dentro del lienzo, sin eventos de
+      // puntero, para no comerse el click que justamente está esperando.
+      const miCasaHint = L.DomUtil.create("div", "mi-casa-hint", lienzo);
+      miCasaHint.setAttribute("role", "status");
+      miCasaHint.textContent = "Tocá tu casa en el mapa";
+      miCasaHint.hidden = true;
+
       function marcarMiCasaEnMapa(punto: PuntoMapa): void {
         const latlng: L.LatLngTuple = [punto.lat, punto.lng];
         if (miCasaMarker) {
@@ -428,10 +466,26 @@ export function createMap(container: HTMLElement): MapaInundacion {
           })
           .bindPopup("Mi casa");
       }
+      function borrarMiCasaDelMapa(): void {
+        if (!miCasaMarker) return;
+        miCasaMarker.remove();
+        miCasaMarker = null;
+      }
+
+      const desuscribirModo = suscribirModoEleccion((activo) => {
+        miCasaHint.hidden = !activo;
+        lienzo.classList.toggle("eligiendo-mi-casa", activo);
+      });
+
       map.on("click", (e: L.LeafletMouseEvent) => {
+        // C6: fuera del modo elección, un click en el mapa no marca ni mueve
+        // nada. El mapa se navega sin riesgo de perder el punto guardado.
+        if (!modoEleccionActivo) return;
         const punto: PuntoMapa = { lat: e.latlng.lat, lng: e.latlng.lng };
         marcarMiCasaEnMapa(punto);
         emitirMiCasaClick(punto);
+        // El modo es de un solo uso: marcar lo apaga.
+        setModoEleccionMiCasa(false);
       });
 
       let capaActual: L.GeoJSON | null = null;
@@ -483,11 +537,13 @@ export function createMap(container: HTMLElement): MapaInundacion {
         setNivelPronosticado: estado.setNivelPronosticado,
         seleccionar: (h) => estado.seleccionar(h, { porUsuario: true }),
         marcarMiCasa: marcarMiCasaEnMapa,
+        borrarMiCasa: borrarMiCasaDelMapa,
       };
       if (pendienteActual !== null) estado.setNivelActual(pendienteActual);
       if (pendientePronosticado !== null) estado.setNivelPronosticado(pendientePronosticado);
       if (pendienteSeleccion !== null) estado.seleccionar(pendienteSeleccion, { porUsuario: true });
       if (pendienteMiCasa !== null) marcarMiCasaEnMapa(pendienteMiCasa);
+      limpiezas.push(desuscribirModo);
     })
     .catch(() => {
       if (destroyed) return;
@@ -512,11 +568,18 @@ export function createMap(container: HTMLElement): MapaInundacion {
     marcarMiCasa(punto) {
       api.marcarMiCasa(punto);
     },
+    borrarMiCasa() {
+      api.borrarMiCasa();
+    },
     onMiCasaClick(listener) {
       return suscribirMiCasaClick(listener);
     },
     destroy() {
       destroyed = true;
+      setModoEleccionMiCasa(false);
+      document.removeEventListener("keydown", cancelarConEscape);
+      for (const limpiar of limpiezas) limpiar();
+      limpiezas.length = 0;
       if (ultimaInstancia === instancia) {
         ultimaInstancia = null;
         ultimaSeleccion = null;
@@ -556,6 +619,21 @@ export function marcarMiCasa(punto: PuntoMapa): void {
 
 export function onMiCasaClick(listener: (punto: PuntoMapa) => void): () => void {
   return suscribirMiCasaClick(listener);
+}
+
+export function borrarMiCasa(): void {
+  ultimaInstancia?.borrarMiCasa();
+}
+
+/** Enciende o apaga el modo elección (spec 015, C6). Lo llama el botón de la tarjeta. */
+export function setModoEleccionMiCasa(activo: boolean): void {
+  if (modoEleccionActivo === activo) return;
+  modoEleccionActivo = activo;
+  for (const listener of modoEleccionListeners) listener(activo);
+}
+
+export function onModoEleccionMiCasaCambia(listener: (activo: boolean) => void): () => void {
+  return suscribirModoEleccion(listener);
 }
 
 /** Se dispara (con replay del último valor) en cuanto `index.json` y la `CapaCache` del mapa están listos. */

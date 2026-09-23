@@ -76,6 +76,46 @@ Por eso, junto a la respuesta, **siempre y sin poder cerrarse**:
 La altura se muestra **redondeada al escalón de las capas** (0,25 m), nunca con más precisión de la
 que el dato tiene.
 
+### C6 — Marcar, cambiar y borrar el punto, con un botón que se vea
+
+**Defecto encontrado al usar la app**: el handler de click del mapa marcaba "Mi casa" en **cualquier**
+click, sin condición (`map.on("click", …)` en `map.ts`). Tocar el mapa para cerrar un popup, para
+mirar otra zona o sin querer movía la casa del vecino, y no había forma de deshacerlo ni de borrarla.
+Reportado así: *"tengo que poder eliminar o editar el puntero porque me equivoqué y no puedo
+modificarlo"*.
+
+De fondo hay un problema de diseño: la función era **un click escondido en el mapa**. Un vecino
+—sobre todo uno mayor— no toca un mapa al azar a ver qué pasa. La función existía y no se usaba.
+
+Se da vuelta: el gesto pasa a ser **explícito y con estado visible**.
+
+- **Sin punto marcado** → un botón `📍 Marcar mi casa`.
+- **Al tocarlo** → el mapa entra en **modo elección**: cartel encima del lienzo ("Tocá tu casa en el
+  mapa"), cursor de mira, y un botón `Cancelar`. **Sólo en este modo un click marca el punto**; en
+  cualquier otro momento el mapa se navega sin riesgo de mover nada.
+- **El modo se apaga solo** al marcar (es de un uso), al cancelar y al apretar `Escape`.
+- **Con punto marcado** → la respuesta, y debajo `Elegir otro punto` y `Borrar`.
+- **`Borrar`** saca el marcador del mapa, limpia `localStorage` y vuelve la tarjeta a su estado
+  inicial. **Sin diálogo de confirmación**: no es una acción destructiva ni irrecuperable —es un
+  punto en un mapa— y un diálogo más es fricción para alguien que ya está inseguro. Volver a
+  marcarlo son dos toques.
+
+### C7 — Explicarle al vecino cómo se usa
+
+Junto al botón, un `¿Cómo se usa?` plegable (`<details>`, sin JS) con los tres pasos:
+
+> 1. Tocá **"Marcar mi casa"**
+> 2. Tocá tu casa en el mapa
+> 3. Te decimos a qué altura del río llega el agua ahí
+
+Y una cuarta línea con la promesa de privacidad, que es la que hace que alguien se anime a marcar su
+propia casa:
+
+> El punto queda guardado **sólo en este teléfono**. No se envía a ningún lado.
+
+El marcador lleva su etiqueta "Mi casa" visible en el mapa, para distinguirlo de las capas azules y
+del hidrómetro.
+
 ## Fuera de alcance
 
 - **No se guarda nada en el servidor** y **no hay login**. Decisión del usuario: el punto vive en el
@@ -141,6 +181,18 @@ la privacidad.
       Entrada "privacidad" extendida en `faq.ts`; test existente sigue verde.
 - [x] Funciona a 360 px, en ambos temas. Verificado en navegador: 336 px de ancho de tarjeta a 360
       px de viewport, sin overflow horizontal de la página, en `light` y en `dark`.
+- [x] **(C6)** Un click en el mapa **fuera del modo elección no mueve ni crea** el marcador.
+      Verificado en la app real con **control positivo**: el script cuenta los clicks que Leaflet
+      recibe de verdad, porque "no pasó nada" también es el resultado de un click que nunca llegó.
+- [x] **(C6)** `Marcar mi casa` entra en modo elección, con cartel y cursor propios; `Cancelar`,
+      `Escape` y marcar el punto lo apagan. Los cuatro caminos verificados en navegador.
+- [x] **(C6)** `Elegir otro punto` vuelve a entrar en modo elección y el segundo punto reemplaza al
+      primero: queda **un solo** marcador y el valor de `localStorage` cambia.
+- [x] **(C6)** `Borrar` saca el marcador del mapa, limpia `localStorage` (verificado recargando la
+      página) y la tarjeta vuelve a "sin punto", sin diálogo de confirmación.
+- [x] **(C7)** El `¿Cómo se usa?` muestra los tres pasos y la promesa de privacidad, plegado por
+      defecto. Capturas en `specs/assets/015/c6-*.png` (360 y 1280 px, claro y oscuro); sin
+      overflow horizontal y los botones miden 44 px de alto en los tres anchos.
 - [x] `ruff`, `pytest`, `pnpm build` y `pnpm test` pasan. Ver "Cómo verificar" para los resultados
       literales.
 
@@ -200,6 +252,32 @@ Verificación manual adicional en navegador (Playwright, script ad-hoc no commit
   - Fuera del área modelada (`-33.0, -58.145`, bien al sur del `bbox` real
     `[-58.35, -32.35, -57.95, -32.1]`): **"Ese punto queda fuera del área que mapeamos"**.
 
+### C6/C7 — marcar, cambiar, borrar y la ayuda
+
+```bash
+cd frontend
+pnpm exec tsc --noEmit          # sin errores
+pnpm test                       # 30 archivos, 303 tests
+pnpm build
+
+# Con `pnpm dev` levantado (WEB_PORT de .env.local):
+URL=http://127.0.0.1:5203 node scripts/verificar-mi-casa-controles.mjs
+node scripts/capturas-mi-casa.mjs     # captura y mide 360/1280, claro y oscuro
+```
+
+`verificar-mi-casa-controles.mjs` corre 23 chequeos sobre la app real, en este orden: control
+positivo de que el click llega a Leaflet → el click fuera del modo elección no marca → el botón
+enciende el modo (cartel + cursor) → `Escape` cancela → `Cancelar` cancela → el click en modo
+elección marca y apaga el modo → "Elegir otro punto" reemplaza sin acumular marcadores → `Borrar`
+limpia mapa y `localStorage` y sobrevive a recargar → la ayuda de C7 está y va plegada.
+
+`capturas-mi-casa.mjs` deja las capturas en `specs/assets/015/` y mide lo que una captura no
+muestra: sin overflow horizontal de la página y 44 px de alto en cada botón, a 360 y 1280 px, en
+`light` y `dark`.
+
+Backend sin tocar, verde igual: `uv run ruff check . && uv run ruff format --check . && uv run
+pytest -q` → 335 passed, 4 skipped.
+
 ## Hallazgos
 
 - `#tarjeta-telegram` no tiene ningún `grid-area` asignado en ninguno de los 3 breakpoints de
@@ -218,11 +296,32 @@ Verificación manual adicional en navegador (Playwright, script ad-hoc no commit
   `mountAvisosTelegram` antes de esta spec. Se verificaron a mano en navegador real (ver "Cómo
   verificar").
 
+- **Defecto real encontrado usando la app (C6), no por los tests.** `map.ts` marcaba "Mi casa" en
+  **cualquier** click del mapa (`map.on("click", …)` sin ninguna condición): tocar para cerrar un
+  popup o para mirar otra zona movía la casa del vecino, y no había forma de borrarla. Los 291
+  tests de entonces pasaban en verde, porque ninguno ejercitaba el handler de Leaflet. Es el mismo
+  patrón que ya se repitió en esta serie de specs: **el defecto sólo aparece mirando la app
+  corriendo.**
+- **Falso positivo en la propia verificación, atrapado a tiempo.** El primer chequeo "un click
+  fuera del modo elección no marca" pasaba en verde... porque el click nunca llegaba al mapa:
+  clickear un botón de la tarjeta hace que Playwright scrollee la página, y las coordenadas
+  absolutas calculadas antes quedaban viejas (`page.mouse.click` las usa tal cual). Se arregló de
+  dos formas, y las dos importan: el click ahora va por `locator.click({position})`, que scrollea y
+  traduce solo; y el chequeo negativo lleva un **control positivo** que cuenta los clicks que
+  Leaflet recibe de verdad. Un test que afirma "no pasó nada" no vale nada si no prueba primero que
+  algo debería haber pasado.
+- El test "el disclaimer no tiene forma de cerrarse" medía que **la tarjeta entera** no tuviera
+  ningún `<button`. Con C6 la tarjeta sí tiene botones, así que se reescribió para medir el
+  invariante que la spec realmente pide: que el **bloque del disclaimer** no lleve ningún control.
+  Mismo arreglo en `verificar-mi-casa-privacidad.mjs`.
+
 ## Resumen final
 
-Implementado "Mi casa" (C1-C5): búsqueda binaria (~6 de 43 capas) con ray-casting propio
-(`pointInPolygon.ts`), 100% client-side — verificado con script de red que ninguna request lleva
-la coordenada. Persiste en `localStorage` (patrón de `theme.ts`), precarga el umbral de Telegram,
-y siempre muestra el disclaimer fijo de C5, sin botón de cerrar. `ruff`/`pytest`/`tsc`/`build`/
-`vitest` pasan (292 tests nuevos+existentes en frontend, 335 en backend/worker sin cambios).
-Hallazgo fuera de alcance: `#tarjeta-telegram` sin `grid-area` (preexistente, no tocado).
+"Mi casa" responde a qué altura del río se moja un punto, con búsqueda binaria sobre 6 de las 43
+capas y **sin que la coordenada salga nunca del dispositivo** (verificado interceptando todo el
+tráfico). Al usarla apareció un defecto que ningún test veía: el mapa marcaba la casa en
+**cualquier** click, así que tocar el mapa la movía y no había forma de borrarla; ahora el gesto es
+explícito (botón → modo elección → click), con "Elegir otro punto", "Borrar" y un "¿Cómo se usa?"
+de tres pasos. 303 tests de frontend y 335 de backend en verde, más 23 chequeos sobre la app real —
+uno de ellos un control positivo, porque el primer chequeo negativo pasaba en verde clickeando al
+vacío.
