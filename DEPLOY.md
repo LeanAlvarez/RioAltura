@@ -71,6 +71,14 @@ En **Domains** de la aplicación:
 - **Container Port**: `80`.
 - **HTTPS**: activado, con Let's Encrypt.
 
+Traefik llega al contenedor por la red `dokploy-network`, a la que `web` se conecta en el compose
+(spec 017). **No hace falta ningún puerto abierto en el firewall del VPS** más que el 80 y el 443 de
+Traefik: el puerto de `web` está atado a `127.0.0.1`.
+
+Si el dominio devuelve un `404 page not found` en texto plano, ése es el 404 **de Traefik** (nginx
+devuelve HTML): quiere decir que no registró la ruta. Revisá que el Service Name sea `web`, el
+Container Port `80`, y que hayas **redesplegado** después de guardar el dominio.
+
 ---
 
 ## 5. Desplegar
