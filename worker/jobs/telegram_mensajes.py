@@ -188,6 +188,8 @@ def _linea_dia_pronostico(dia: DiaResumen) -> str:
 def mensaje_cambio_nivel(
     nivel: str,
     altura_hoy_m: float | None,
+    fecha_dato: datetime,
+    fuente: str,
     primer_dia: date | None = None,
     rango_min_m: float | None = None,
     rango_max_m: float | None = None,
@@ -198,6 +200,10 @@ def mensaje_cambio_nivel(
     justifica el nuevo nivel (`AvisoPronostico.primer_dia` y el día
     correspondiente de `anclar_pronostico`). Se omiten (o no aplican) cuando
     `nivel == "sin_aviso"`: la vuelta a la normalidad no proyecta un cruce.
+
+    Lleva fecha y fuente del dato aunque sea el mensaje corto: el §6 pide que
+    todo dato mostrado vaya con su fecha, y en una alerta importa más que en
+    ningún otro lado saber de cuándo es el número que la disparó.
     """
     emoji = _NIVEL_EMOJI[nivel]
     etiqueta = NIVELES_AVISO_TEXTO[nivel].upper()
@@ -216,8 +222,10 @@ def mensaje_cambio_nivel(
         rango_txt = _formato_rango(rango_min_m, rango_max_m)
         cuerpo = f"El río podría llegar a {rango_txt} el {dia_txt}.\n{altura_txt}"
 
+    fuente_txt = FUENTE_TEXTO.get(fuente, fuente)
+    procedencia = f"📅 Dato del {_formato_fecha_hora(fecha_dato)} ({fuente_txt})."
     pie = f"⚠️ {DISCLAIMER}\nSeguí los avisos de Prefectura y Defensa Civil."
-    return f"{encabezado}\n\n{cuerpo}\n\n{pie}"
+    return f"{encabezado}\n\n{cuerpo}\n\n{procedencia}\n{pie}"
 
 
 def mensaje_estado_diario(

@@ -129,9 +129,12 @@ def test_m1_sin_bloque_rio_arriba_no_aparece_la_seccion() -> None:
 # --- M3: cambio de nivel corto ---------------------------------------------------
 
 
+FECHA_DATO = datetime(2026, 9, 22, 3, 0, tzinfo=UTC)
+
+
 def test_m3_cambio_de_nivel_reproduce_el_formato_exacto_de_la_spec() -> None:
     """Reproduce el ejemplo literal de la sección M3 de la spec 014."""
-    texto = mensaje_cambio_nivel("atencion", 4.29, date(2026, 9, 28), 4.6, 6.6)
+    texto = mensaje_cambio_nivel("atencion", 4.29, FECHA_DATO, "ina", date(2026, 9, 28), 4.6, 6.6)
 
     esperado = (
         "🟡 ATENCIÓN — Río Uruguay en Colón\n"
@@ -139,28 +142,43 @@ def test_m3_cambio_de_nivel_reproduce_el_formato_exacto_de_la_spec() -> None:
         "El río podría llegar a entre 4,6 y 6,6 m el lunes 28.\n"
         "Hoy está en 4,29 m.\n"
         "\n"
+        "📅 Dato del 22/09 00:00 (INA).\n"
         "⚠️ Orientativo. No reemplaza a Prefectura ni a Defensa Civil.\n"
         "Seguí los avisos de Prefectura y Defensa Civil."
     )
     assert texto == esperado
 
 
+def test_m3_lleva_fecha_y_fuente_del_dato() -> None:
+    """§6: todo dato mostrado va con su fecha, y en una alerta importa más que nunca.
+
+    La primera versión de M3 se había quedado sin la procedencia, interpretando
+    que el formato literal de la spec la reemplazaba. Un vecino que recibe una
+    alerta tiene que poder saber de cuándo es el número que la disparó.
+    """
+    texto = mensaje_cambio_nivel("atencion", 4.29, FECHA_DATO, "caru", date(2026, 9, 28), 4.6, 6.6)
+    assert "22/09" in texto
+    assert "CARU" in texto
+
+
 def test_m3_no_lleva_el_resumen_completo_de_m1() -> None:
     """Criterio de aceptación: el mensaje de cambio de nivel es corto, sin el resumen de M1."""
-    texto = mensaje_cambio_nivel("alerta_probable", 7.2, date(2026, 9, 28), 7.5, 9.5)
+    texto = mensaje_cambio_nivel(
+        "alerta_probable", 7.2, FECHA_DATO, "ina", date(2026, 9, 28), 7.5, 9.5
+    )
     for fragmento_m1 in ("📏 Hoy:", "🔮 Próximos días", "📅 Medición del puerto"):
         assert fragmento_m1 not in texto
 
 
 def test_m3_sin_aviso_no_proyecta_un_cruce() -> None:
-    texto = mensaje_cambio_nivel("sin_aviso", 4.29)
+    texto = mensaje_cambio_nivel("sin_aviso", 4.29, FECHA_DATO, "ina")
     assert "🟢 SIN AVISO — Río Uruguay en Colón" in texto
     assert "volvió a la normalidad" in texto
     assert "Hoy está en 4,29 m." in texto
 
 
 def test_m3_sin_altura_de_hoy_no_rompe() -> None:
-    texto = mensaje_cambio_nivel("atencion", None, date(2026, 9, 28), 4.6, 6.6)
+    texto = mensaje_cambio_nivel("atencion", None, FECHA_DATO, "ina", date(2026, 9, 28), 4.6, 6.6)
     assert "Todavía no hay una medición de hoy." in texto
 
 

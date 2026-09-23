@@ -219,6 +219,8 @@ def _publicar_canal(engine: Engine, client: httpx.Client, now: datetime, hoy: da
         texto = mensaje_cambio_nivel(
             nivel_observado,
             altura.altura_m if altura is not None else None,
+            altura.fecha_hora if altura is not None else now,
+            altura.fuente if altura is not None else "",
             dia_cruce.fecha if dia_cruce is not None else None,
             dia_cruce.altura_anclada_min_m if dia_cruce is not None else None,
             dia_cruce.altura_anclada_max_m if dia_cruce is not None else None,
