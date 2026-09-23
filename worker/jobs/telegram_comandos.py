@@ -92,34 +92,46 @@ def _procesar_comando(
 
     if comando == "/start":
         if not resto:
-            enviar_mensaje_seguro(engine, client, chat_id, MENSAJE_BIENVENIDA, ahora)
+            enviar_mensaje_seguro(
+                engine, client, chat_id, MENSAJE_BIENVENIDA, ahora, es_respuesta=True
+            )
             return
         umbral_m = parse_umbral_deeplink(resto)
         if umbral_m is None:
-            enviar_mensaje_seguro(engine, client, chat_id, MENSAJE_UMBRAL_INVALIDO, ahora)
+            enviar_mensaje_seguro(
+                engine, client, chat_id, MENSAJE_UMBRAL_INVALIDO, ahora, es_respuesta=True
+            )
             return
         fijar_umbral(engine, chat_id, umbral_m)
-        enviar_mensaje_seguro(engine, client, chat_id, mensaje_umbral_fijado(umbral_m), ahora)
+        enviar_mensaje_seguro(
+            engine, client, chat_id, mensaje_umbral_fijado(umbral_m), ahora, es_respuesta=True
+        )
         return
 
     if comando == "/umbral":
         if not resto:
             suscripcion = obtener_suscripcion(engine, chat_id)
             texto_respuesta = mensaje_umbral_actual(suscripcion.umbral_m if suscripcion else None)
-            enviar_mensaje_seguro(engine, client, chat_id, texto_respuesta, ahora)
+            enviar_mensaje_seguro(
+                engine, client, chat_id, texto_respuesta, ahora, es_respuesta=True
+            )
             return
         umbral_m = parse_umbral_texto(resto)
         if umbral_m is None:
-            enviar_mensaje_seguro(engine, client, chat_id, MENSAJE_UMBRAL_INVALIDO, ahora)
+            enviar_mensaje_seguro(
+                engine, client, chat_id, MENSAJE_UMBRAL_INVALIDO, ahora, es_respuesta=True
+            )
             return
         fijar_umbral(engine, chat_id, umbral_m)
-        enviar_mensaje_seguro(engine, client, chat_id, mensaje_umbral_fijado(umbral_m), ahora)
+        enviar_mensaje_seguro(
+            engine, client, chat_id, mensaje_umbral_fijado(umbral_m), ahora, es_respuesta=True
+        )
         return
 
     if comando == "/baja":
         borrada = eliminar_suscripcion(engine, chat_id)
         texto_respuesta = MENSAJE_BAJA_OK if borrada else MENSAJE_BAJA_SIN_SUSCRIPCION
-        enviar_mensaje_seguro(engine, client, chat_id, texto_respuesta, ahora)
+        enviar_mensaje_seguro(engine, client, chat_id, texto_respuesta, ahora, es_respuesta=True)
         return
 
     # Comando desconocido: se ignora en silencio, no hace falta responder a todo.

@@ -96,19 +96,39 @@ def _en_ventana_diurna(now: datetime) -> bool:
 
 
 def enviar_mensaje_seguro(
-    engine: Engine, client: httpx.Client, chat_id: str | int, texto: str, ahora: datetime
+    engine: Engine,
+    client: httpx.Client,
+    chat_id: str | int,
+    texto: str,
+    ahora: datetime,
+    *,
+    es_respuesta: bool = False,
 ) -> int | None:
     """Send `texto` to `chat_id`, or don't -- and never raise. Returns the message_id or None.
 
     Every guard that keeps this feature from ever spamming or breaking the
     worker lives here, in order: no token configured, S4 (kill switch), S3
     (daily cap), then S5 (a Telegram failure is logged and swallowed).
+
+    `es_respuesta=True` marks the other half of a conversation the person
+    started -- a reply to their own command -- and skips S4 only (spec 021).
+
+    S4 exists to stop the bot from BROADCASTING: the public channel and the
+    threshold alerts, which it sends on its own initiative to people who are
+    not looking. A reply to someone who just wrote to the bot is not a
+    broadcast, and silencing it protects nobody: their threshold is stored
+    either way, and the silence of "saved" is identical to the silence of
+    "broken". It also meant that testing the bot at all required turning
+    broadcasting on -- taking the exact risk the switch exists to avoid.
+
+    Every other guard still applies to replies, the daily cap included: a
+    burst of commands must not be able to drain the channel's budget.
     """
     settings = get_settings()
     if not settings.telegram_bot_token:
         logger.info("telegram: sin TELEGRAM_BOT_TOKEN configurado, no se publica")
         return None
-    if not settings.telegram_publicacion_activa:
+    if not settings.telegram_publicacion_activa and not es_respuesta:
         logger.info("telegram: publicación desactivada (TELEGRAM_PUBLICACION_ACTIVA=false, S4)")
         return None
     if not reservar_cupo_diario(

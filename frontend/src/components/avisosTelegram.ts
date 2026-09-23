@@ -1,10 +1,4 @@
-import {
-  buildTelegramCanalUrl,
-  buildTelegramDeepLink,
-  UMBRAL_MAX_M,
-  UMBRAL_MIN_M,
-  umbralValido,
-} from "../domain/telegram";
+import { buildTelegramCanalUrl, buildTelegramDeepLink, mensajeUmbralInvalido, umbralValido } from "../domain/telegram";
 
 /**
  * Tarjeta "Avisos por Telegram" (spec 011): el canal público (nivel 1, sin
@@ -34,14 +28,21 @@ export function renderAvisosTelegram(container: HTMLElement): void {
     <form class="telegram-umbral-form" novalidate>
       <label for="telegram-umbral-input">O avisame cuando el río llegue a (metros):</label>
       <div class="telegram-umbral-controles">
+        <!--
+          type="text" y NO type="number", a propósito (spec 021). Con
+          type="number" el navegador descarta la coma en silencio si su
+          locale usa punto -- y cuando el valor no le parece válido,
+          \`input.value\` devuelve CADENA VACÍA. En un celular eso daba:
+          escribís "7,12", no ves nada raro, y la app te dice que es
+          inválido. \`inputmode="decimal"\` sigue mostrando el teclado
+          numérico; leer el texto crudo nos deja aceptar coma Y punto.
+        -->
         <input
           id="telegram-umbral-input"
           name="umbral"
-          type="number"
+          type="text"
           inputmode="decimal"
-          step="0.01"
-          min="${UMBRAL_MIN_M}"
-          max="${UMBRAL_MAX_M}"
+          autocomplete="off"
           placeholder="ej: 4,44"
           required
         />
@@ -78,10 +79,11 @@ export function mountAvisosTelegram(container: HTMLElement): void {
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
-    const umbralM = Number(input.value.replace(",", "."));
+    const crudo = input.value.trim();
+    const umbralM = Number(crudo.replace(",", "."));
 
     if (!umbralValido(umbralM)) {
-      error.textContent = `Ingresá una altura en metros entre ${UMBRAL_MIN_M} y ${UMBRAL_MAX_M}.`;
+      error.textContent = mensajeUmbralInvalido(crudo);
       error.hidden = false;
       return;
     }

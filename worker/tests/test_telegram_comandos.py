@@ -37,7 +37,11 @@ def engine() -> Iterator[Engine]:
 def respuestas(monkeypatch: pytest.MonkeyPatch) -> list[tuple[int, str]]:
     enviados: list[tuple[int, str]] = []
 
-    def _fake_enviar(engine, client, chat_id, texto, ahora):  # noqa: ANN001 - test double
+    def _fake_enviar(engine, client, chat_id, texto, ahora, *, es_respuesta=False):  # noqa: ANN001 - test double
+        # Todo lo que sale de `telegram_comandos` es una RESPUESTA a un
+        # comando directo (spec 021): si alguna llamada olvidara marcarlo,
+        # el interruptor S4 la callaría en producción y acá no se notaría.
+        assert es_respuesta is True, "un mensaje del bot a un comando debe ir como respuesta"
         enviados.append((chat_id, texto))
         return 1
 
