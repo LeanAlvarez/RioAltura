@@ -265,11 +265,16 @@ URL=http://127.0.0.1:5203 node scripts/verificar-mi-casa-controles.mjs
 node scripts/capturas-mi-casa.mjs     # captura y mide 360/1280, claro y oscuro
 ```
 
-`verificar-mi-casa-controles.mjs` corre 23 chequeos sobre la app real, en este orden: control
+`verificar-mi-casa-controles.mjs` corre 35 chequeos sobre la app real, en este orden: control
 positivo de que el click llega a Leaflet → el click fuera del modo elección no marca → el botón
 enciende el modo (cartel + cursor) → `Escape` cancela → `Cancelar` cancela → el click en modo
 elección marca y apaga el modo → "Elegir otro punto" reemplaza sin acumular marcadores → `Borrar`
 limpia mapa y `localStorage` y sobrevive a recargar → la ayuda de C7 está y va plegada.
+
+Los últimos chequeos cubren los arreglos de la revisión, y **seis de ellos fallan si se revierte el
+código** (verificado con `git stash`: la ayuda plegándose sola, el nodo `aria-live` recreado, el foco
+perdido, y los tres del escenario de 3G). Dos escenarios se prueban con la red frenada a propósito
+(`page.route` con demora): `index.json` a 6 s y el chunk de `map.ts` a 5 s.
 
 `capturas-mi-casa.mjs` deja las capturas en `specs/assets/015/` y mide lo que una captura no
 muestra: sin overflow horizontal de la página y 44 px de alto en cada botón, a 360 y 1280 px, en
@@ -277,6 +282,40 @@ muestra: sin overflow horizontal de la página y 44 px de alto en cada botón, a
 
 Backend sin tocar, verde igual: `uv run ruff check . && uv run ruff format --check . && uv run
 pytest -q` → 335 passed, 4 skipped.
+
+### Arreglos de la revisión (previos al merge)
+
+Un revisor sobre el diff de C6/C7 encontró cinco defectos reales. Todos arreglados, todos con un
+chequeo que falla si se revierten:
+
+1. **El modo elección no servía hasta que cargaban las capas.** El cartel, el cursor y el
+   `map.on("click")` vivían dentro del `.then()` de `fetchCapaIndex()`, pero el botón de la tarjeta
+   se puede apretar mucho antes. En 3G —el target de `CLAUDE.md` §7— el vecino tocaba "Marcar mi
+   casa", tocaba el mapa y no pasaba nada. Se subieron fuera del `.then()`: marcar es dibujar un
+   círculo, no necesita el índice. Y si `index.json` **falla**, ahora el mapa lo avisa
+   (`onCapaIndexError`) en vez de dejar la tarjeta en "Buscando…" para siempre con un modo encendido
+   que no lleva a ningún lado.
+2. **El punto guardado se perdía** si el vecino entraba al modo elección antes de que cargaran las
+   capas: la restauración corría una sola vez y sólo si la tarjeta seguía en "sin punto", así que
+   quedaba un punto en `localStorage` que la app ya no mostraba. Ahora la guarda mira si el vecino
+   marcó algo (`puntoMarcado`), no en qué pantalla está.
+3. **La región `aria-live` se destruía y recreaba en cada cambio**, con el texto ya adentro: así no
+   la anuncia casi ningún lector de pantalla. Además el estado de error llevaba `role="alert"` y
+   `aria-live="polite"` juntos, y el `polite` explícito degradaba el `assertive` implícito.
+4. **El foco volvía a `<body>` en cada acción**, porque el botón apretado desaparecía con el
+   repintado. Quien navega por teclado tenía que tabular desde el principio del documento.
+5. **El `¿Cómo se usa?` se plegaba solo**: el vecino leía el paso 1, lo ejecutaba, y la ayuda se
+   cerraba justo antes de los pasos 2 y 3 — el flujo exacto que C7 existe para sostener.
+
+Los cuatro últimos salían de la misma causa: **reescribir el `innerHTML` entero de la tarjeta en
+cada cambio de estado**. Se separó en un armazón fijo (`renderEstructuraMiCasa`, que se escribe una
+sola vez y contiene la región `aria-live` y el `<details>`) y tres pedazos que se repintan
+(`partesMiCasa`). El foco se traslada al botón que ocupa el lugar del que desapareció.
+
+**Y un sexto, que apareció al escribir el chequeo del punto 2**: la tarjeta pinta su botón antes de
+que termine de importarse `map.ts`, que es un chunk aparte de ~46 kB comprimidos. En 3G el toque se
+perdía en silencio. Ahora la intención se anota y se aplica cuando el import resuelve; si el módulo
+no carga nunca, la tarjeta vuelve a su estado inicial en vez de esperar un click que nadie escucha.
 
 ## Hallazgos
 

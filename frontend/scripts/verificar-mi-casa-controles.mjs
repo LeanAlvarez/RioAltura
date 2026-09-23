@@ -175,6 +175,156 @@ assert(
   "la ayuda va plegada por defecto (no le come la pantalla al resultado)",
 );
 
+// --- 8. Los arreglos de la revisión -------------------------------------
+
+// 8a. La ayuda no se pliega sola al cambiar de estado (C7). Era el defecto:
+// el vecino leía el paso 1, lo ejecutaba, y la ayuda se cerraba justo antes
+// de los pasos 2 y 3.
+await page.locator(".mi-casa-ayuda summary").click();
+await page.waitForTimeout(200);
+assert(await page.locator(".mi-casa-pasos").isVisible(), "la ayuda se abre al tocarla");
+await page.locator('#tarjeta-mi-casa [data-accion="marcar"]').click();
+await page.waitForTimeout(300);
+assert(
+  await page.locator(".mi-casa-pasos").isVisible(),
+  "la ayuda SIGUE abierta después de cambiar de estado (no se pliega sola)",
+);
+
+// 8b. El nodo que anuncia la respuesta es el mismo siempre: un `aria-live`
+// recreado junto con su texto no lo anuncia en la mayoría de los lectores.
+await page.evaluate(() => {
+  document.querySelector(".mi-casa-resultado").setAttribute("data-marca", "1");
+});
+await clickEnMapa(0.5, 0.45);
+await esperarCalculo();
+assert(
+  (await page.locator('.mi-casa-resultado[data-marca="1"]').count()) === 1,
+  "la región aria-live sobrevive al repintado (mismo nodo, no uno nuevo)",
+);
+assert(
+  (await page.locator(".mi-casa-resultado").getAttribute("aria-live")) === "polite",
+  "la región mantiene aria-live=polite",
+);
+
+// 8c. El foco no se pierde al accionar: pasa al botón que ocupa el lugar.
+await page.locator('#tarjeta-mi-casa [data-accion="borrar"]').focus();
+await page.locator('#tarjeta-mi-casa [data-accion="borrar"]').click();
+await page.waitForTimeout(300);
+assert(
+  (await page.evaluate(() => document.activeElement?.getAttribute("data-accion"))) === "marcar",
+  "tras Borrar el foco queda en el botón que lo reemplaza, no en <body>",
+);
+
+// --- 9. Conexión lenta: el botón se puede apretar antes de que carguen las
+// capas (CLAUDE.md §7 diseña para 3G). Antes el cartel, el cursor y el
+// handler de click vivían dentro del .then() de index.json: se tocaba
+// "Marcar mi casa", se tocaba el mapa, y no pasaba nada.
+const lenta = await context.newPage();
+await lenta.route("**/capas/index.json", async (route) => {
+  await new Promise((r) => setTimeout(r, 6000));
+  await route.continue();
+});
+await lenta.goto(url, { waitUntil: "domcontentloaded" });
+await lenta.waitForSelector(".mapa-inundacion-lienzo", { timeout: 30_000 });
+await lenta.waitForSelector('#tarjeta-mi-casa [data-accion="marcar"]', { timeout: 30_000 });
+await lenta.locator('#tarjeta-mi-casa [data-accion="marcar"]').click();
+await lenta.waitForTimeout(300);
+assert(
+  await lenta.locator(".mi-casa-hint").isVisible(),
+  "con las capas todavía cargando, el modo elección YA muestra su cartel",
+);
+const boxLenta = await lenta.locator(".mapa-inundacion-lienzo").boundingBox();
+await lenta.locator(".mapa-inundacion-lienzo").click({
+  position: { x: Math.round(boxLenta.width * 0.45), y: Math.round(boxLenta.height * 0.4) },
+});
+await lenta.waitForTimeout(400);
+assert(
+  (await lenta.locator(SEL_MARCADOR).count()) === 1,
+  "con las capas todavía cargando, el click marca el punto igual",
+);
+assert(
+  ((await lenta.locator(".mi-casa-resultado").textContent()) ?? "").includes("Buscando"),
+  "y la tarjeta dice que está buscando, sin inventar un error",
+);
+await lenta
+  .waitForFunction(
+    () => {
+      const t = document.querySelector(".mi-casa-resultado")?.textContent ?? "";
+      return t.length > 0 && !t.includes("Buscando");
+    },
+    { timeout: 40_000 },
+  )
+  .catch(() => {});
+assert(
+  !((await lenta.locator(".mi-casa-resultado").textContent()) ?? "").includes("No pudimos calcular"),
+  "cuando por fin llegan las capas, el cálculo se completa (no quedó en error)",
+);
+await lenta.close();
+
+// --- 10. El punto guardado no se pierde por haber tocado "Marcar" antes de
+// que cargaran las capas. La restauración corría una sola vez y sólo si la
+// tarjeta seguía en "sin punto": entrar al modo elección la salteaba para
+// siempre, y quedaba localStorage con un punto que la app ya no mostraba.
+const lenta2 = await context.newPage();
+await lenta2.route("**/capas/index.json", async (route) => {
+  await new Promise((r) => setTimeout(r, 6000));
+  await route.continue();
+});
+await lenta2.goto(url, { waitUntil: "domcontentloaded" });
+await lenta2.evaluate(() => {
+  localStorage.setItem("rioaltura-mi-casa", JSON.stringify({ lat: -32.2147, lng: -58.137 }));
+});
+await lenta2.reload({ waitUntil: "domcontentloaded" });
+await lenta2.waitForSelector(".mapa-inundacion-lienzo", { timeout: 30_000 });
+await lenta2.waitForSelector('#tarjeta-mi-casa [data-accion="marcar"]', { timeout: 30_000 });
+await lenta2.locator('#tarjeta-mi-casa [data-accion="marcar"]').click();
+await lenta2.waitForTimeout(300);
+await lenta2.keyboard.press("Escape");
+await lenta2
+  .waitForFunction(
+    () => {
+      const t = document.querySelector(".mi-casa-resultado")?.textContent ?? "";
+      return /\d,\d{2}\s*m/.test(t);
+    },
+    { timeout: 40_000 },
+  )
+  .catch(() => {});
+assert(
+  (await lenta2.locator(SEL_MARCADOR).count()) === 1,
+  "el punto guardado se restaura aunque se haya entrado al modo elección antes de que cargaran las capas",
+);
+assert(
+  !((await lenta2.locator("#tarjeta-mi-casa").textContent()) ?? "").includes("Marcá tu casa en el mapa"),
+  "y la tarjeta muestra su respuesta, no el estado inicial con el punto todavía en localStorage",
+);
+await lenta2.close();
+
+// --- 11. El toque que llega antes que el módulo del mapa. La tarjeta pinta
+// su botón enseguida, pero `map.ts` es un chunk aparte (~46 kB comprimidos):
+// en 3G se puede tocar "Marcar mi casa" cuando todavía no hay a quién
+// avisarle. La intención se anota y se aplica al resolver el import.
+const lenta3 = await context.newPage();
+// En dev Vite sirve el módulo como /src/map.ts; en un build, como un chunk.
+await lenta3.route(/\/(src\/map\.ts|assets\/map-[^/]+\.js)/, async (route) => {
+  await new Promise((r) => setTimeout(r, 5000));
+  await route.continue();
+});
+await lenta3.goto(url, { waitUntil: "domcontentloaded" });
+await lenta3.waitForSelector('#tarjeta-mi-casa [data-accion="marcar"]', { timeout: 30_000 });
+assert(
+  (await lenta3.locator(".mapa-inundacion-lienzo").count()) === 0,
+  "control positivo: el módulo del mapa todavía NO cargó cuando se toca el botón",
+);
+await lenta3.locator('#tarjeta-mi-casa [data-accion="marcar"]').click();
+await lenta3.waitForTimeout(300);
+assert(
+  ((await lenta3.locator(".mi-casa-resultado").textContent()) ?? "").includes("Tocá tu casa"),
+  "el toque no se pierde: la tarjeta ya responde aunque el mapa no haya llegado",
+);
+await lenta3.waitForSelector(".mi-casa-hint", { state: "visible", timeout: 30_000 });
+assert(true, "y al llegar el mapa, el modo elección queda encendido de verdad");
+await lenta3.close();
+
 await browser.close();
 if (fallo) {
   console.error("\nHAY FALLAS");

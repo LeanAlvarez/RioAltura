@@ -431,6 +431,17 @@ body {
   margin-top: 0.75rem;
 }
 
+/*
+ * Los contenedores del disclaimer y de las acciones son fijos (se escriben
+ * una sola vez, ver `components/miCasa.ts`) y se llenan en cada cambio de
+ * estado. Vacíos no deben dejar aire: mientras busca no hay ni botones ni
+ * disclaimer.
+ */
+.mi-casa-acciones:empty,
+.mi-casa-disclaimer-wrap:empty {
+  display: none;
+}
+
 .mi-casa-boton {
   border: 1px solid var(--border);
   border-radius: 0.4rem;

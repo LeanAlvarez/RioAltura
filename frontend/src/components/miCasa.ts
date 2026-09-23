@@ -7,29 +7,25 @@ import {
   type MiCasaView,
   type PuntoMapa,
 } from "../domain/miCasa";
-import {
-  borrarPunto,
-  guardarPunto,
-  leerPuntoGuardado,
-  type StorageLike,
-} from "../miCasaStorage";
+import { borrarPunto, guardarPunto, leerPuntoGuardado, type StorageLike } from "../miCasaStorage";
 import { precargarUmbral } from "./avisosTelegram";
 
 /**
  * "Mi casa" (spec 015): a qué altura del puerto se moja el punto que el
  * vecino elige en el mapa.
  *
- * `renderMiCasa` es puro (sólo arma HTML a partir de una `MiCasaView` ya
- * calculada) y está testeado, mismo patrón que `estadoHoy.ts`/
- * `avisosTelegram.ts`. `mountMiCasa` es la capa fina que conecta con
- * `map.ts` (vía import dinámico, igual que `superficieAfectada.ts`, para no
- * romper la página si ese módulo no carga) y con `miCasaStorage.ts` -- toca
- * `document`/`window` reales y no tiene test unitario.
- *
  * El gesto es explícito (C6): un botón enciende el modo elección del mapa y
  * recién ahí un click marca el punto. Antes marcaba en cualquier click, y
  * tocar el mapa para cualquier otra cosa movía la casa del vecino sin forma
  * de deshacerlo.
+ *
+ * La tarjeta se arma UNA vez (`renderEstructuraMiCasa`) y después sólo se
+ * repintan sus partes (`partesMiCasa`). No es un detalle de rendimiento:
+ * reescribir el `innerHTML` entero en cada cambio rompía tres cosas a la vez
+ * -- la región `aria-live` nacía con el texto ya adentro (y los lectores de
+ * pantalla no anuncian eso), el foco del teclado volvía a `<body>` en cada
+ * acción, y el `<details>` de ayuda se plegaba solo justo cuando el vecino
+ * estaba siguiendo sus pasos.
  */
 
 function renderCuerpo(view: MiCasaView): string {
@@ -48,51 +44,61 @@ function renderCuerpo(view: MiCasaView): string {
 }
 
 /**
- * Sólo se muestra junto a una respuesta real (C5: "siempre, junto a la
- * respuesta"). Antes de marcar ("sin-punto", "eligiendo") no hay respuesta
- * todavía, así que no hay nada de qué advertir; en cuanto hay algún
- * resultado -- incluido "fuera de área" o un error -- se muestra, y nunca se
- * puede cerrar (el bloque no lleva ningún control).
+ * Hay una respuesta que mostrar. Antes de marcar ("sin-punto", "eligiendo") y
+ * mientras busca no hay nada de qué advertir ni nada que borrar, así que el
+ * mismo predicado decide el disclaimer (C5) y los botones (C6): nunca puede
+ * aparecer una respuesta sin su disclaimer al lado.
  */
-function muestraDisclaimer(kind: MiCasaView["kind"]): boolean {
+function hayRespuesta(kind: MiCasaView["kind"]): boolean {
   return kind !== "sin-punto" && kind !== "eligiendo" && kind !== "calculando";
 }
 
-function renderDisclaimer(): string {
-  return `
-    <div class="mi-casa-disclaimer">
-      <strong>${DISCLAIMER_MI_CASA}</strong>
-    </div>
-  `;
+export interface PartesMiCasa {
+  /** `alert` para el error: es la única respuesta que conviene anunciar sin esperar. */
+  rol: "status" | "alert";
+  cuerpo: string;
+  disclaimer: string;
+  acciones: string;
 }
 
-/** Hay un punto marcado (aunque no se haya podido calcular su altura): se puede cambiar o borrar. */
-function hayPunto(kind: MiCasaView["kind"]): boolean {
-  return kind !== "sin-punto" && kind !== "eligiendo" && kind !== "calculando";
+/** Pure: estado ya derivado -> los tres pedazos variables de la tarjeta. No DOM. */
+export function partesMiCasa(view: MiCasaView): PartesMiCasa {
+  const disclaimer = hayRespuesta(view.kind)
+    ? `<div class="mi-casa-disclaimer"><strong>${DISCLAIMER_MI_CASA}</strong></div>`
+    : "";
+
+  let botones = "";
+  if (view.kind === "eligiendo") {
+    botones = `<button type="button" class="mi-casa-boton" data-accion="cancelar">Cancelar</button>`;
+  } else if (hayRespuesta(view.kind)) {
+    botones =
+      `<button type="button" class="mi-casa-boton mi-casa-boton-primario" data-accion="marcar">Elegir otro punto</button>` +
+      `<button type="button" class="mi-casa-boton mi-casa-boton-borrar" data-accion="borrar">Borrar</button>`;
+  } else if (view.kind === "sin-punto") {
+    botones = `<button type="button" class="mi-casa-boton mi-casa-boton-primario" data-accion="marcar">📍 Marcar mi casa</button>`;
+  }
+
+  return {
+    rol: view.kind === "error" ? "alert" : "status",
+    cuerpo: renderCuerpo(view),
+    disclaimer,
+    acciones: botones,
+  };
 }
 
 /**
- * Los botones son el arreglo de fondo de C6: el vecino ve qué puede hacer en
- * vez de tener que adivinar que un click en el mapa hace algo.
+ * Pure: el armazón fijo de la tarjeta, que se escribe una sola vez. Los
+ * contenedores que quedan vacíos los llena `partesMiCasa` en cada cambio;
+ * el `<details>` de ayuda (C7) vive acá justamente para que nunca se lo
+ * lleve puesto un repintado.
  */
-function renderAcciones(kind: MiCasaView["kind"]): string {
-  if (kind === "calculando") return "";
-  const botones =
-    kind === "eligiendo"
-      ? `<button type="button" class="mi-casa-boton" data-accion="cancelar">Cancelar</button>`
-      : hayPunto(kind)
-        ? `<button type="button" class="mi-casa-boton mi-casa-boton-primario" data-accion="marcar">Elegir otro punto</button>` +
-          `<button type="button" class="mi-casa-boton mi-casa-boton-borrar" data-accion="borrar">Borrar</button>`
-        : `<button type="button" class="mi-casa-boton mi-casa-boton-primario" data-accion="marcar">📍 Marcar mi casa</button>`;
-  return `<div class="mi-casa-acciones">${botones}</div>`;
-}
-
-/**
- * C7: explicarle al vecino cómo se usa, sin obligarlo a leerlo. `<details>`
- * nativo -- sin JS, accesible por teclado y plegado por defecto.
- */
-function renderAyuda(): string {
+export function renderEstructuraMiCasa(): string {
   return `
+    <h2>Mi casa</h2>
+    <p class="card-subtitulo">A qué altura del río se moja el punto que elijas.</p>
+    <div class="mi-casa-resultado" role="status" aria-live="polite"></div>
+    <div class="mi-casa-disclaimer-wrap"></div>
+    <div class="mi-casa-acciones"></div>
     <details class="mi-casa-ayuda">
       <summary>¿Cómo se usa?</summary>
       <ol class="mi-casa-pasos">
@@ -107,26 +113,18 @@ function renderAyuda(): string {
   `;
 }
 
-/** Pure: sólo arma el HTML de la tarjeta a partir de una `MiCasaView` ya calculada. No lógica, no DOM real. */
-export function renderMiCasa(container: HTMLElement, view: MiCasaView): void {
-  const rol = view.kind === "error" ? "alert" : "status";
-  container.innerHTML = `
-    <h2>Mi casa</h2>
-    <p class="card-subtitulo">A qué altura del río se moja el punto que elijas.</p>
-    <div class="mi-casa-resultado" role="${rol}" aria-live="polite">${renderCuerpo(view)}</div>
-    ${muestraDisclaimer(view.kind) ? renderDisclaimer() : ""}
-    ${renderAcciones(view.kind)}
-    ${renderAyuda()}
-  `;
-}
-
 interface MiCasaMapModule {
   onCapaIndexListo?: (listener: (ctx: { index: CapaIndex; cache: CapaCache }) => void) => () => void;
+  onCapaIndexError?: (listener: () => void) => () => void;
   onMiCasaClick?: (listener: (punto: PuntoMapa) => void) => () => void;
   onModoEleccionMiCasaCambia?: (listener: (activo: boolean) => void) => () => void;
   marcarMiCasa?: (punto: PuntoMapa) => void;
   borrarMiCasa?: () => void;
   setModoEleccionMiCasa?: (activo: boolean) => void;
+}
+
+export interface MontajeMiCasa {
+  destroy(): void;
 }
 
 /**
@@ -139,22 +137,62 @@ export function mountMiCasa(
   telegramContainer?: HTMLElement,
   storage: StorageLike = window.localStorage,
   loadMapModule: () => Promise<MiCasaMapModule> = () => import("../map"),
-): void {
+): MontajeMiCasa {
   let state: MiCasaState = { kind: "sin-punto" };
-  // Último estado que correspondía a un punto marcado. Si el vecino entra al
+  // Último estado que correspondía a un punto marcado: si el vecino entra al
   // modo elección y lo cancela, la tarjeta vuelve acá en vez de perder la
   // respuesta que ya tenía.
   let estadoConPunto: MiCasaState | null = null;
+  // El punto que el vecino marcó (o el restaurado). Distinto de
+  // `estadoConPunto`: existe aunque el cálculo todavía no haya terminado, y
+  // es lo que decide si hay que restaurar el guardado o no.
+  let puntoMarcado: PuntoMapa | null = null;
   let ctx: { index: CapaIndex; cache: CapaCache } | null = null;
   let mapa: MiCasaMapModule | null = null;
+  // El módulo del mapa se importa aparte (son ~46 kB comprimidos) y la
+  // tarjeta ya pintó su botón mucho antes de que llegue. En 3G el vecino lo
+  // toca y todavía no hay a quién avisarle: se anota la intención y se
+  // aplica en cuanto el módulo resuelve, en vez de tragarse el toque.
+  let eleccionPendiente = false;
+  const bajas: Array<() => void> = [];
+
+  container.innerHTML = renderEstructuraMiCasa();
+  const resultadoEl = container.querySelector<HTMLElement>(".mi-casa-resultado");
+  const disclaimerEl = container.querySelector<HTMLElement>(".mi-casa-disclaimer-wrap");
+  const accionesEl = container.querySelector<HTMLElement>(".mi-casa-acciones");
+  if (!resultadoEl || !disclaimerEl || !accionesEl) return { destroy(): void {} };
+
+  function pintar(view: MiCasaView): void {
+    if (!resultadoEl || !disclaimerEl || !accionesEl) return;
+    const partes = partesMiCasa(view);
+
+    resultadoEl.setAttribute("role", partes.rol);
+    // `role="alert"` ya implica `assertive`; dejarle encima un `aria-live`
+    // explícito lo degradaría a `polite`.
+    if (partes.rol === "alert") resultadoEl.removeAttribute("aria-live");
+    else resultadoEl.setAttribute("aria-live", "polite");
+    resultadoEl.innerHTML = partes.cuerpo;
+    disclaimerEl.innerHTML = partes.disclaimer;
+
+    // Si el foco estaba en el botón que acaba de desaparecer, se lo pasamos
+    // al que ocupa su lugar. Sin esto, quien navega por teclado vuelve al
+    // principio del documento en cada acción.
+    const teniaFoco = accionesEl.contains(document.activeElement);
+    accionesEl.innerHTML = partes.acciones;
+    if (teniaFoco) accionesEl.querySelector("button")?.focus();
+  }
 
   function actualizar(nuevo: MiCasaState): void {
+    if (hayRespuesta(nuevo.kind)) estadoConPunto = nuevo;
+    // Mientras el vecino está eligiendo, nada le pisa la pantalla: un cálculo
+    // que llega tarde (la restauración del punto guardado, por ejemplo) queda
+    // en `estadoConPunto` y se muestra cuando termine de elegir. El camino
+    // normal de marcado no pasa por acá: `map.ts` apaga el modo antes de
+    // avisar del click.
+    if (state.kind === "eligiendo" && nuevo.kind !== "eligiendo") return;
     state = nuevo;
-    if (nuevo.kind !== "sin-punto" && nuevo.kind !== "eligiendo" && nuevo.kind !== "calculando") {
-      estadoConPunto = nuevo;
-    }
     const view = deriveMiCasaView(state);
-    renderMiCasa(container, view);
+    pintar(view);
     if (telegramContainer && (view.kind === "encontrado" || view.kind === "ya-inundado")) {
       precargarUmbral(telegramContainer, view.alturaM);
     }
@@ -162,18 +200,17 @@ export function mountMiCasa(
 
   actualizar(state);
 
-  async function calcular(punto: PuntoMapa): Promise<void> {
+  async function calcular(punto: PuntoMapa, yaGuardado = false): Promise<void> {
+    puntoMarcado = punto;
     // Se guarda apenas se marca (C3), independiente del resultado: es "el
     // punto marcado", no "el punto que dio una altura calculable".
-    guardarPunto(punto, storage);
-    if (!ctx) {
-      actualizar({ kind: "error" });
-      return;
-    }
+    if (!yaGuardado) guardarPunto(punto, storage);
     actualizar({ kind: "calculando" });
+    // Las capas todavía no llegaron (3G): el punto queda anotado y se calcula
+    // en cuanto lleguen, en vez de mostrar un error que no es tal.
+    if (!ctx) return;
     try {
-      const resultado = await buscarAlturaInundacion(ctx.index, ctx.cache, punto);
-      actualizar(resultado);
+      actualizar(await buscarAlturaInundacion(ctx.index, ctx.cache, punto));
     } catch {
       actualizar({ kind: "error" });
     }
@@ -181,72 +218,116 @@ export function mountMiCasa(
 
   function borrar(): void {
     borrarPunto(storage);
-    mapa?.borrarMiCasa?.();
     mapa?.setModoEleccionMiCasa?.(false);
+    mapa?.borrarMiCasa?.();
     estadoConPunto = null;
+    puntoMarcado = null;
     actualizar({ kind: "sin-punto" });
   }
 
   // Delegación: un único listener en la tarjeta, que sobrevive a cada
-  // `innerHTML = ...` de `renderMiCasa` (los botones se recrean en cada
-  // render, así que no se les puede colgar el handler directamente).
-  container.addEventListener("click", (e) => {
+  // repintado de los botones.
+  function alClickear(e: MouseEvent): void {
     const target = e.target;
     if (!(target instanceof Element)) return;
     const boton = target.closest("[data-accion]");
     if (!boton) return;
     switch (boton.getAttribute("data-accion")) {
       case "marcar":
-        mapa?.setModoEleccionMiCasa?.(true);
+        if (mapa?.setModoEleccionMiCasa) mapa.setModoEleccionMiCasa(true);
+        else {
+          eleccionPendiente = true;
+          actualizar({ kind: "eligiendo" });
+        }
         break;
       case "cancelar":
-        mapa?.setModoEleccionMiCasa?.(false);
+        eleccionPendiente = false;
+        if (mapa?.setModoEleccionMiCasa) mapa.setModoEleccionMiCasa(false);
+        else actualizar(estadoConPunto ?? { kind: "sin-punto" });
         break;
       case "borrar":
         borrar();
         break;
     }
-  });
+  }
+  container.addEventListener("click", alClickear);
 
   void loadMapModule()
     .then((mod) => {
       mapa = mod;
+      // Antes de suscribirse: así el replay de la suscripción ya trae el modo
+      // encendido y la tarjeta no parpadea entre "eligiendo" y "sin punto".
+      if (eleccionPendiente) {
+        eleccionPendiente = false;
+        mod.setModoEleccionMiCasa?.(true);
+      }
       if (typeof mod.onCapaIndexListo === "function") {
-        mod.onCapaIndexListo((listo) => {
-          ctx = listo;
-          // Restaurar el punto guardado (C3), sólo si el vecino todavía no
-          // marcó nada en esta sesión (no pisar un click real reciente).
-          if (state.kind === "sin-punto") {
+        bajas.push(
+          mod.onCapaIndexListo((listo) => {
+            ctx = listo;
+            // Si el vecino ya marcó algo (incluso antes de que llegaran las
+            // capas), eso gana sobre el punto guardado.
+            if (puntoMarcado) {
+              void calcular(puntoMarcado, true);
+              return;
+            }
             const guardado = leerPuntoGuardado(storage);
             if (guardado) {
               mod.marcarMiCasa?.(guardado);
-              void calcular(guardado);
+              void calcular(guardado, true);
             }
-          }
-        });
+          }),
+        );
+      }
+      if (typeof mod.onCapaIndexError === "function") {
+        bajas.push(
+          mod.onCapaIndexError(() => {
+            // Sin capas no se puede calcular nunca: decirlo en vez de dejar
+            // la tarjeta en "Buscando…" para siempre.
+            if (puntoMarcado) actualizar({ kind: "error" });
+          }),
+        );
       }
       if (typeof mod.onMiCasaClick === "function") {
-        mod.onMiCasaClick((punto) => {
-          void calcular(punto);
-        });
+        bajas.push(
+          mod.onMiCasaClick((punto) => {
+            void calcular(punto);
+          }),
+        );
       }
       if (typeof mod.onModoEleccionMiCasaCambia === "function") {
-        mod.onModoEleccionMiCasaCambia((activo) => {
-          if (activo) {
-            actualizar({ kind: "eligiendo" });
-            return;
-          }
-          // Se apagó el modo. Si fue porque marcó un punto, `calcular` ya
-          // movió la tarjeta a "calculando" y no hay nada que hacer; si fue
-          // un cancelar (botón o Escape), se vuelve a lo que había antes.
-          if (state.kind === "eligiendo") {
-            actualizar(estadoConPunto ?? { kind: "sin-punto" });
-          }
-        });
+        bajas.push(
+          mod.onModoEleccionMiCasaCambia((activo) => {
+            if (activo) {
+              actualizar({ kind: "eligiendo" });
+              return;
+            }
+            // Se apagó el modo sin marcar (botón Cancelar o Escape): se
+            // vuelve a lo que había antes.
+            if (state.kind === "eligiendo") {
+              state = { kind: "sin-punto" };
+              actualizar(estadoConPunto ?? { kind: "sin-punto" });
+            }
+          }),
+        );
       }
     })
     .catch(() => {
       // El mapa no cargó (spec 006 defensivo, ver `components/mapa.ts`): la
-      // tarjeta se queda en "sin-punto", sin romper el resto de la página.
+      // tarjeta vuelve a su estado inicial en vez de quedarse esperando un
+      // click que nadie va a escuchar, y el resto de la página sigue igual.
+      eleccionPendiente = false;
+      if (state.kind === "eligiendo") {
+        state = { kind: "sin-punto" };
+        actualizar(estadoConPunto ?? { kind: "sin-punto" });
+      }
     });
+
+  return {
+    destroy(): void {
+      container.removeEventListener("click", alClickear);
+      for (const baja of bajas) baja();
+      bajas.length = 0;
+    },
+  };
 }
