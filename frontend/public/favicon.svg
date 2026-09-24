@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img"
+     aria-label="El río a media altura">
+  <!--
+    Cuarto intento, y el enfoque cambió: el sujeto de esta app no es la
+    regla, es EL NIVEL.
+
+    Los tres anteriores dibujaban el hidrómetro y a 16 px cada uno colapsaba
+    en otra cosa: una mancha, una cruz, y una letra F. Una barra vertical con
+    marcas horizontales SIEMPRE se vuelve una letra a ese tamaño.
+
+    Lo que no colapsa es un área con una superficie: agua a media altura, con
+    la cresta de una ola que la distingue de un rectángulo cualquiera. Las
+    tres muescas del borde derecho dicen "esto se mide": se pierden a 16 px
+    y aparecen de 32 en adelante.
+
+    Azul #2a78d6, el de la medición real en toda la app.
+  -->
+  <rect width="32" height="32" rx="7" fill="#16202c"/>
+
+  <!-- El agua, con superficie. La curva es lo que la hace agua y no un bloque. -->
+  <path d="M0 17.5c4.2 0 4.2-3 8.4-3s4.2 3 8.4 3 4.2-3 8.4-3c2.1 0 3.1.75 4.2 1.5V25a7 7 0 0 1-7 7H7a7 7 0 0 1-7-7z"
+        fill="#2a78d6"/>
+
+  <!-- La escala, pegada al borde y con poco redondeo: así se lee como marcas
+       de una regla y no como tres botones, que es lo que parecían cuando
+       estaban separadas y con forma de píldora. -->
+  <g fill="#ffffff" opacity="0.9">
+    <rect x="23" y="6" width="6.5" height="2" rx="0.6"/>
+    <rect x="25.5" y="10" width="4" height="2" rx="0.6"/>
+    <rect x="23" y="14" width="6.5" height="2" rx="0.6"/>
+  </g>
+</svg>
