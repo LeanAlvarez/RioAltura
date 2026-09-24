@@ -1,5 +1,7 @@
 # Río Uruguay en Colón
 
+**Español** · [English](README.en.md) · [Português](README.pt.md)
+
 App web pública que muestra el estado del río Uruguay a su paso por **Colón, Entre Ríos**:
 a cuánto está el río, si eso es peligroso, qué viene en los próximos días, y qué zonas de
 la ciudad se inundan a cada altura.
