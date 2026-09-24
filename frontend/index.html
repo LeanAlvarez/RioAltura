@@ -5,6 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Estado del río Uruguay en Colón, Entre Ríos: altura, pronóstico y mapa de inundación." />
     <title>Río Uruguay en Colón</title>
+
+    <!--
+      Favicon (spec 026). El SVG es la fuente; los PNG los genera
+      `scripts/generar-favicon.mjs` y son el respaldo para los navegadores
+      que todavía no toman SVG.
+    -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon-96.png" sizes="96x96" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <!--
+      El color de la barra del navegador en mobile, acompañando al tema:
+      el mismo azul de la medición real y el mismo fondo oscuro de la app.
+    -->
+    <meta name="theme-color" content="#2a78d6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#12161c" media="(prefers-color-scheme: dark)" />
   </head>
   <body>
     <!-- D3 (spec 013): fuera de #app a propósito, para quedar visible aunque
